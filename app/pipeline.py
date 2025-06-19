@@ -1,11 +1,11 @@
 import os
 import asyncio
 from dotenv import load_dotenv
-from channel_parser import fetch_announcements_from_channel
-from ocr_module import OCRProcessor
-from perplexity_api import PerplexityProcessor
-from message_formatter import MessageFormatter
-from telegram_client import send_message_to_channel, send_message_with_photos_to_channel
+from app.utils.channel_parser import fetch_announcements_from_channel
+from app.core.ocr import OCRProcessor
+from app.core.perplexity import PerplexityProcessor
+from app.utils.message_formatter import MessageFormatter
+from app.core.telegram import send_message_to_channel, send_message_with_photos_to_channel
 import re
 import sys
 import shutil

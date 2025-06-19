@@ -28,15 +28,4 @@ async def fetch_text_messages_from_channel(source_channel, limit=500):
             })
     await client.disconnect()
     print(f"Найдено текстовых сообщений: {len(messages)}")
-    return messages
-
-if __name__ == "__main__":
-    import asyncio
-    load_dotenv()
-    source_channel = os.getenv("TELEGRAM_CHANNEL")
-    if not source_channel:
-        print("TELEGRAM_CHANNEL не задан в .env")
-    else:
-        messages = asyncio.run(fetch_text_messages_from_channel(source_channel, limit=50))
-        for msg in messages:
-            print(f"ID: {msg['id']}\nТекст: {msg['text']}\n{'-'*40}") 
+    return messages 

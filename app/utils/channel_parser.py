@@ -71,15 +71,4 @@ async def fetch_announcements_from_channel(source_channel, limit=500, download_d
     # Не добавляем последний блок, если остались фото без текста
     await client.disconnect()
     print(f"Найдено объявлений: {len(announcements)}")
-    return announcements
-
-if __name__ == "__main__":
-    import asyncio
-    load_dotenv()
-    source_channel = os.getenv("TELEGRAM_CHANNEL")
-    if not source_channel:
-        print("TELEGRAM_CHANNEL не задан в .env")
-    else:
-        anns = asyncio.run(fetch_announcements_from_channel(source_channel, limit=50))
-        for idx, ann in enumerate(anns, 1):
-            print(f"--- Объявление {idx} ---\nПапка: {ann['temp_dir']}\nТекст: {ann['text']}\nФото: {ann['photos']}\n{'-'*40}") 
+    return announcements 

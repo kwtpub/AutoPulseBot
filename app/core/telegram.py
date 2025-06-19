@@ -95,9 +95,4 @@ async def send_message_with_photos_to_channel(message: str, photo_paths: list):
             await client.send_file(channel_id, photo_paths, caption=message, silent=False)
     else:
         await client.send_message(channel_id, message)
-    await client.disconnect()
-
-if __name__ == "__main__":
-    import asyncio
-    test_message = "Тестовое сообщение из userbot!"
-    asyncio.run(send_message_to_channel(test_message)) 
+    await client.disconnect() 

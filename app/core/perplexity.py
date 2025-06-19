@@ -61,25 +61,4 @@ class PerplexityProcessor:
                 'main_text': content,
                 'source': '',
                 'date': ''
-            }
-
-if __name__ == "__main__":
-    import asyncio
-    import os
-    from dotenv import load_dotenv
-
-    load_dotenv()
-    api_key = os.getenv("PERPLEXITY_API_KEY")
-    if not api_key:
-        print("PERPLEXITY_API_KEY не найден в .env")
-        exit(1)
-    text = "Example text for structuring via Perplexity API."
-    source_link = "https://example.com"
-
-    async def main():
-        processor = PerplexityProcessor(api_key)
-        result = await processor.process_text(text, source_link)
-        print("Структурированный результат:")
-        print(result)
-
-    asyncio.run(main()) 
+            } 

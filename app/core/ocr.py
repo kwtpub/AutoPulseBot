@@ -108,19 +108,4 @@ def blip_image_caption(image_path):
     inputs = processor(raw_image, return_tensors="pt")
     out = model.generate(**inputs)
     caption = processor.decode(out[0], skip_special_tokens=True)
-    return caption
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Укажите путь к изображению: python src/ocr_module.py path/to/image.jpg [paddle|yandex] [lang]")
-        sys.exit(1)
-    image_path = sys.argv[1]
-    mode = sys.argv[2] if len(sys.argv) > 2 else ''
-    lang = sys.argv[3] if len(sys.argv) > 3 else 'en'
-    ocr = OCRProcessor(lang=lang, use_paddle=(mode=='paddle'), use_yandex=(mode=='yandex'))
-    text = ocr.extract_text(image_path)
-    print("Распознанный текст:")
-    print(text)
-    print("BLIP caption:")
-    print(blip_image_caption(image_path)) 
+    return caption 
