@@ -1,0 +1,7 @@
+telethon>=1.34.0
+python-telegram-bot>=20.7
+pytesseract>=0.3.10
+pillow>=10.1.0
+aiohttp>=3.9.1
+python-dotenv>=1.0.0
+loguru>=0.7.2

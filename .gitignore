@@ -1,0 +1,13 @@
+.cursor/
+.git/
+.taskmaster/
+downloads/
+venv/
+.roo/
+.env
+.roomodes
+.windsurfrules
+session.session
+!.gitkeep
+
+mcp.json
