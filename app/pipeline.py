@@ -11,6 +11,7 @@ import sys
 import shutil
 
 async def process_all_cars_from_channel():
+    print(">>> Запуск конвейера обработки автомобилей...")
     load_dotenv()
     source_channel = os.getenv("TELEGRAM_CHANNEL")
     if not source_channel:
@@ -30,7 +31,10 @@ async def process_all_cars_from_channel():
         except Exception:
             start_from_id = None
 
+    print(f">>> Получение объявлений из канала {source_channel}...")
     announcements = await fetch_announcements_from_channel(source_channel, limit=50, start_from_id=start_from_id)
+    print(f">>> Получено {len(announcements)} объявлений.")
+    
     api_key = os.getenv("PERPLEXITY_API_KEY")
     if not api_key:
         print("PERPLEXITY_API_KEY не найден в .env")
@@ -39,6 +43,7 @@ async def process_all_cars_from_channel():
     formatter = MessageFormatter()
 
     for idx, ann in enumerate(announcements, 1):
+        print(f"\n--- Обработка объявления {idx}/{len(announcements)} ---")
         text = ann["text"]
         photos = ann["photos"]
         temp_dir = ann["temp_dir"]
@@ -48,6 +53,8 @@ async def process_all_cars_from_channel():
 
         # OCR для всех фото, объединяем результаты
         ocr_texts = []
+        if photos:
+            print(f">> Запуск OCR для {len(photos)} фото...")
         for photo_path in photos:
             ocr = OCRProcessor(lang='ru', use_yandex=True)
             ocr_text = ocr.extract_text(photo_path)
@@ -56,6 +63,8 @@ async def process_all_cars_from_channel():
                 continue
             ocr_texts.append(ocr_text)
         ocr_data = '\n'.join(ocr_texts)
+        if ocr_data:
+            print(">> OCR завершен. Результат получен.")
 
         # Формируем промпт для Perplexity
         prompt = f"""
@@ -88,7 +97,9 @@ async def process_all_cars_from_channel():
 {text}
 """
         # Отправляем в Perplexity и сразу публикуем ответ
+        print(">> Отправка запроса в Perplexity API...")
         result = await perplexity.process_text(prompt)
+        print(">> Ответ от Perplexity получен.")
         # Если Perplexity вернул dict с main_text — используем main_text, иначе весь ответ
         if isinstance(result, dict) and 'main_text' in result:
             msg = result['main_text']
@@ -106,12 +117,15 @@ async def process_all_cars_from_channel():
         msg = re.sub(r'(?i)(контакты[^\n.!?]*[.!?]?)', '', msg)
         msg = re.sub(r'\n\n+', '\n\n', msg)  # чистим лишние пустые строки
 
+        print(">> Отправка сообщения в Telegram...")
         await send_message_with_photos_to_channel(msg, photos)
+        print(f">> Сообщение для объявления {idx} успешно отправлено.")
 
     # После отправки всех сообщений — удалить temp
     temp_dir = 'temp'
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
+    print(">>> Конвейер завершил работу.")
 
 if __name__ == "__main__":
     asyncio.run(process_all_cars_from_channel()) 
