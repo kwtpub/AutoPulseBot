@@ -6,7 +6,7 @@ from app.core.ocr import OCRProcessor
 from app.core.perplexity import PerplexityProcessor
 from app.utils.message_formatter import MessageFormatter
 from app.core.telegram import send_message_to_channel, send_message_with_photos_to_channel
-from app.utils.config import get_telegram_config, get_pricing_config, get_application_config
+from app.utils.config import get_telegram_config, get_pricing_config
 import re
 import sys
 import shutil
@@ -22,7 +22,11 @@ async def process_all_cars_from_channel():
     # Получаем параметры из config.ini
     limit, start_from_id = get_telegram_config()
     markup_percentage = get_pricing_config()
-    button_text, button_url = get_application_config()
+    
+    # Получаем данные для кнопки-заявки
+    bot_username = os.getenv("BOT_USERNAME")
+    button_text = "📞 Отправить заявку" # Текст можно вынести в config.ini, если нужна гибкость
+    button_url = f"https://t.me/{bot_username}" if bot_username else None
 
     print(f">>> Получение объявлений из канала {source_channel} (лимит: {limit}, старт с ID: {start_from_id or 'последние'})...")
     announcements = await fetch_announcements_from_channel(source_channel, limit=limit, start_from_id=start_from_id)
