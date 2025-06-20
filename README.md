@@ -40,10 +40,32 @@ python bot.py
 ## 🗂 Пример `.env`
 
 ```env
-BOT_TOKEN=твой_токен_бота
-SOURCE_CHANNEL_ID=@source_channel
-TARGET_CHANNEL_ID=@target_channel
-ADMIN_ID=123456789
+
+# === TELEGRAM CONFIG ===
+
+TELEGRAM_API_ID=<ID приложения Telegram с https://my.telegram.org>  
+TELEGRAM_API_HASH=<HASH ключ Telegram приложения>  
+TELEGRAM_PHONE=<Телефон Telegram аккаунта, например +79991234567>  
+
+BOT_TOKEN=<Токен бота от BotFather, например 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11>  
+BOT_USERNAME=<Username бота, например @my_bot>  
+TELEGRAM_BOT_TOKEN=<Можно дублировать BOT_TOKEN, если нужно>  
+
+TELEGRAM_CHANNEL=<Username канала, например @my_channel>  
+TELEGRAM_CHANNEL_ID=<ID канала, например -1001234567890>  
+CHANNEL_USERNAME=<Синоним TELEGRAM_CHANNEL_ID или username канала>  
+ADMIN_GROUP_ID=<ID группы для админов, например -1009876543210>  
+
+# === YANDEX CLOUD CONFIG ===
+
+YANDEX_OAUTH_TOKEN=<OAuth токен, полученный в Yandex Cloud>  
+YANDEX_IAM_TOKEN=<IAM токен для доступа к API Yandex>  
+YANDEX_FOLDER_ID=<ID каталога в Yandex Cloud>  
+YANDEX_TOKEN_TIMESTAMP=<Timestamp окончания IAM токена, например 1750418266>  
+
+# === PERPLEXITY AI CONFIG ===
+
+PERPLEXITY_API_KEY=<API ключ Perplexity, если используешь>  
 ```
 
 ## 🛠 Планы на будущее
