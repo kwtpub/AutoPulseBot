@@ -11,22 +11,12 @@ class PerplexityProcessor:
             'Content-Type': 'application/json'
         }
     
-    async def process_text(self, text: str, source_link: str = '') -> Dict:
-        prompt = f'''Analyze the following text and structure it according to this template:
-        - Title (if identifiable)
-        - Brief description/annotation
-        - Main text/key data
-        - Source link: {source_link}
-        - Publication date
-        
-        Text to analyze: {text}
-        
-        Return structured JSON with fields: title, description, main_text, source, date'''
-        
+    async def process_text(self, prompt: str) -> str:
+        """Отправляет готовый промпт в Perplexity и возвращает текстовый ответ."""
         payload = {
-            'model': 'sonar-pro',
+            'model': 'sonar-pro', # Исправленная модель с доступом в интернет
             'messages': [
-                {'role': 'system', 'content': 'Будь точным и кратким.'},
+                {'role': 'system', 'content': 'Ты — помощник, который точно следует инструкциям по форматированию текста.'},
                 {'role': 'user', 'content': prompt}
             ],
             'temperature': 0.2,
@@ -41,24 +31,8 @@ class PerplexityProcessor:
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return self._parse_response(result)
+                    # Просто возвращаем текстовое содержимое ответа
+                    return result['choices'][0]['message']['content']
                 else:
                     error_text = await response.text()
-                    raise Exception(f'Perplexity API error: {response.status} {error_text}')
-    
-    def _parse_response(self, response: Dict) -> Dict:
-        try:
-            content = response['choices'][0]['message']['content']
-            # Parse JSON from response
-            structured_data = json.loads(content)
-            return structured_data
-        except:
-            # Fallback parsing if JSON fails
-            content = response['choices'][0]['message']['content']
-            return {
-                'title': 'Untitled',
-                'description': content[:200],
-                'main_text': content,
-                'source': '',
-                'date': ''
-            } 
+                    raise Exception(f'Perplexity API error: {response.status} {error_text}') 
