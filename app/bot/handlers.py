@@ -11,8 +11,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Получаем ID админской группы из переменных окружения
-ADMIN_GROUP_ID = os.getenv("ADMIN_GROUP_ID")
+# ID админской группы будет получаться внутри функции
+# ADMIN_GROUP_ID = os.getenv("ADMIN_GROUP_ID") # Удаляем эту строку
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отправляет приветственное сообщение при старте бота."""
@@ -28,6 +28,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает текстовые сообщения от пользователя, сохраняет и пересылает их."""
     user = update.effective_user
     text = update.message.text
+    
+    # Получаем ID админской группы из переменных окружения здесь
+    admin_group_id = os.getenv("ADMIN_GROUP_ID")
 
     # 1. Сохраняем заявку в базу данных
     try:
@@ -40,7 +43,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # return
 
     # 2. Пересылаем сообщение в админский чат
-    if ADMIN_GROUP_ID:
+    if admin_group_id:
         try:
             # Формируем сообщение для админов
             admin_message = (
@@ -48,10 +51,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"-------------------\n"
                 f"{text}"
             )
-            await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=admin_message)
-            logger.info(f"Заявка от {user.id} переслана в группу {ADMIN_GROUP_ID}")
+            await context.bot.send_message(chat_id=admin_group_id, text=admin_message)
+            logger.info(f"Заявка от {user.id} переслана в группу {admin_group_id}")
         except Exception as e:
-            logger.error(f"Ошибка при пересылке сообщения в группу {ADMIN_GROUP_ID}: {e}")
+            logger.error(f"Ошибка при пересылке сообщения в группу {admin_group_id}: {e}")
             # Здесь можно добавить логику уведомления, если пересылка не удалась
     else:
         logger.warning("Переменная окружения ADMIN_GROUP_ID не установлена. Пересылка отключена.")
