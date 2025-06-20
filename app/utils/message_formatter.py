@@ -1,5 +1,8 @@
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime
 from typing import Dict, Optional
+import requests
+import textwrap
 
 class MessageFormatter:
     def __init__(self, template_path: Optional[str] = None):
@@ -170,3 +173,88 @@ class MessageFormatter:
                     result.append(parts[i].strip())
                 i += 1
         return '\n\n'.join(result) 
+
+    def format_car_message(self, car_data: Dict, pricing_config: Dict, application_config: Dict) -> str:
+        def format_section(title, details):
+            if not details:
+                return ""
+            items = []
+            for key, value in details.items():
+                if value:
+                    # Проверяем, является ли значение уже отформатированной строкой (как "Год выпуска")
+                    if isinstance(value, str) and value.startswith(f"<b>{key}"):
+                        items.append(value)
+                    else:
+                        items.append(f"<b>{key}</b>: {value}")
+            return f"<b>{title}</b>\n" + "\n".join(f"– {item}" for item in items) if items else ""
+
+        sections = [
+            f"<b>{car_data.get('title')}</b>",
+            f"<b>Цена: {car_data.get('price')}</b> (в Минске без учёта таможенных платежей)\n",
+            format_section("Краткое описание", {" автомобиля": car_data.get('description')}),
+            format_section("Основные характеристики", {
+                "Год выпуска": car_data.get('year'),
+                "Двигатель": car_data.get('engine'),
+                "Мощность": car_data.get('power'),
+                "Привод": car_data.get('drive'),
+                "Пробег": car_data.get('mileage'),
+                "Кузов": car_data.get('body_type')
+            }),
+            format_section("Комплектация и опции", {k: k for k in car_data.get('options', [])}),
+            format_section("Преимущества", {k: k for k in car_data.get('advantages', [])}),
+            f"\n<i>{car_data.get('slogan')}</i>",
+            f"\n{car_data.get('hashtags')}"
+        ]
+
+        # Убираем пустые секции и соединяем
+        message = "\n\n".join(filter(None, sections))
+        
+        # Удаляем лишние переводы строк и пробелы
+        message = "\n".join(line.strip() for line in message.split('\n') if line.strip())
+        
+        return message
+
+async def send_message_to_telegram(bot, chat_id, text, photo_url=None):
+    """
+    Отправляет форматированное сообщение в Telegram, объединяя фото и текст.
+    """
+    try:
+        if photo_url:
+            # Если текст для подписи слишком длинный, отправляем его отдельным сообщением
+            if len(text) > 1024:
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo_url
+                )
+                # Отправляем текст после фото
+                for i in range(0, len(text), 4096):
+                    chunk = text[i:i+4096]
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=chunk,
+                        parse_mode='HTML',
+                        disable_web_page_preview=True
+                    )
+            else:
+                # Если текст помещается в подпись, отправляем вместе
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo_url,
+                    caption=text,
+                    parse_mode='HTML'
+                )
+            print(f"Сообщение с фото для чата {chat_id} успешно отправлено.")
+        else:
+            # Отправка обычного текстового сообщения (разбиваем на части, если нужно)
+            for i in range(0, len(text), 4096):
+                chunk = text[i:i+4096]
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=chunk,
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
+                )
+            print(f"Текстовое сообщение для чата {chat_id} успешно отправлено.")
+            
+    except Exception as e:
+        print(f"Ошибка при отправке сообщения в чат {chat_id}: {e}") 

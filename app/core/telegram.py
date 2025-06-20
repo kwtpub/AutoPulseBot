@@ -82,26 +82,31 @@ async def fetch_text_photo_pairs(source_channel, limit=500, download_dir="downlo
     await client.disconnect()
     return pairs
 
-async def send_message_with_photos_to_channel(message: str, photo_paths: list, button_text: str = None, button_url: str = None):
+async def send_message_with_photos_to_channel(message: str, photo_paths: list):
+    """
+    Отправляет сообщение с фото в канал в виде альбома.
+    """
     load_dotenv()
     api_id = int(os.getenv("TELEGRAM_API_ID"))
     api_hash = os.getenv("TELEGRAM_API_HASH")
     phone = os.getenv("TELEGRAM_PHONE")
     channel_id = os.getenv("TELEGRAM_CHANNEL_ID")
 
-    buttons = None
-    if button_text and button_url:
-        buttons = [
-            [Button.url(button_text, button_url)]
-        ]
-
     client = TelegramClient('session', api_id, api_hash)
     await client.start(phone=phone)
 
-    # Всегда отправляем текст с кнопкой первым сообщением
-    await client.send_message(channel_id, message, buttons=buttons)
-    # Потом отправляем все фото (без подписи и кнопки)
-    if photo_paths:
-        await client.send_file(channel_id, photo_paths, silent=False)
-
-    await client.disconnect() 
+    try:
+        if not photo_paths:
+            # Если фото нет, просто отправляем текст
+            await client.send_message(channel_id, message)
+        else:
+            # Отправляем все фото как альбом с одной подписью
+            await client.send_file(
+                channel_id,
+                photo_paths,
+                caption=message
+            )
+    except Exception as e:
+        print(f"Ошибка при отправке сообщения в Telegram: {e}")
+    finally:
+        await client.disconnect() 

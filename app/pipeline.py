@@ -23,11 +23,6 @@ async def process_all_cars_from_channel():
     limit, start_from_id = get_telegram_config()
     markup_percentage = get_pricing_config()
     
-    # Получаем данные для кнопки-заявки
-    bot_username = os.getenv("BOT_USERNAME")
-    button_text = "📞 Отправить заявку" # Текст можно вынести в config.ini, если нужна гибкость
-    button_url = f"https://t.me/{bot_username}" if bot_username else None
-
     print(f">>> Получение объявлений из канала {source_channel} (лимит: {limit}, старт с ID: {start_from_id or 'последние'})...")
     announcements = await fetch_announcements_from_channel(source_channel, limit=limit, start_from_id=start_from_id)
     print(f">>> Получено {len(announcements)} объявлений.")
@@ -45,8 +40,8 @@ async def process_all_cars_from_channel():
         photos = ann["photos"]
         temp_dir = ann["temp_dir"]
 
-        # Ограничиваем количество фото максимум 9
-        photos = photos[:9]
+        # Ограничиваем количество фото максимум 8
+        photos = photos[:8]
 
         # OCR для всех фото, объединяем результаты
         ocr_texts = []
@@ -148,7 +143,7 @@ async def process_all_cars_from_channel():
         msg = re.sub(r'\n\n+', '\n\n', msg).strip()  # чистим лишние пустые строки и пробелы
 
         print(">> Отправка сообщения в Telegram...")
-        await send_message_with_photos_to_channel(msg, photos, button_text=button_text, button_url=button_url)
+        await send_message_with_photos_to_channel(msg, photos)
         print(f">> Сообщение для объявления {idx} успешно отправлено.")
 
     # После отправки всех сообщений — удалить temp
