@@ -8,6 +8,7 @@ venv/
 .roomodes
 .windsurfrules
 session.session
+config.ini
 !.gitkeep
 
 mcp.json

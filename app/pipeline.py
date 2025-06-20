@@ -6,6 +6,7 @@ from app.core.ocr import OCRProcessor
 from app.core.perplexity import PerplexityProcessor
 from app.utils.message_formatter import MessageFormatter
 from app.core.telegram import send_message_to_channel, send_message_with_photos_to_channel
+from app.utils.config import get_telegram_config
 import re
 import sys
 import shutil
@@ -18,21 +19,11 @@ async def process_all_cars_from_channel():
         print("TELEGRAM_CHANNEL не задан в .env")
         return
 
-    # Получаем start_from_id из переменной окружения или аргумента
-    start_from_id = None
-    if len(sys.argv) > 1:
-        try:
-            start_from_id = int(sys.argv[1])
-        except Exception:
-            start_from_id = None
-    elif os.getenv("START_FROM_ID"):
-        try:
-            start_from_id = int(os.getenv("START_FROM_ID"))
-        except Exception:
-            start_from_id = None
+    # Получаем параметры из config.ini
+    limit, start_from_id = get_telegram_config()
 
-    print(f">>> Получение объявлений из канала {source_channel}...")
-    announcements = await fetch_announcements_from_channel(source_channel, limit=50, start_from_id=start_from_id)
+    print(f">>> Получение объявлений из канала {source_channel} (лимит: {limit}, старт с ID: {start_from_id or 'последние'})...")
+    announcements = await fetch_announcements_from_channel(source_channel, limit=limit, start_from_id=start_from_id)
     print(f">>> Получено {len(announcements)} объявлений.")
     
     api_key = os.getenv("PERPLEXITY_API_KEY")
@@ -72,19 +63,19 @@ async def process_all_cars_from_channel():
 
 Твоя задача — на основе предоставленных данных об автомобиле создать красивое, удобное и адаптированное под поисковые запросы объявление с такой структурой:
 
-1. Заголовок: [Марка] [Модель] [Двигатель/Объём] [Год] — Ваш идеальный выбор!
+1. Заголовок: [Модель] [Год]
 2. Краткое описание автомобиля (стильный, надёжный, экономичный и т.д.)
 3. Основные характеристики (год выпуска, двигатель, мощность, пробег, кузов, привод, VIN, масса, цвет салона, количество мест)
 4. Комплектация и опции (перечислить доступные)
 5. Преимущества (уникальные плюсы автомобиля)
-6. Призыв к действию (приглашение на просмотр, контакты)
-7. Заключительный слоган
-8. Хештеги с маркой, моделью, типом кузова и коробки передач
+6. Заключительный слоган
+7. Хештеги с маркой, моделью, типом кузова и коробки передач
 
 Если каких-то данных нет, сделай следующее:
 - Если данные можно легко найти в интернете по марке и модели (например, тип кузова, мощность двигателя, комплектация), найди и добавь их.
 - Если данные найти нельзя, просто пропусти этот пункт, чтобы текст оставался логичным и читабельным.
 - Не добавляй пустые или неполные пункты.
+- Не создавай призывов к действию, не приглашай на просмотр и не упоминай контакты.
 
 Используй простой и понятный язык, избегай сложных терминов без объяснений, делай текст привлекательным и продающим.
 
@@ -109,13 +100,21 @@ async def process_all_cars_from_channel():
             msg = str(result)
         print(f"\n--- Сообщение для объявления {idx} ---\n{msg}\n")
 
-        # Удаляем нежелательные фразы про просмотр, звонки, контакты
-        msg = re.sub(r'(?i)(приглашаем[^\n.!?]*на просмотр[^\n.!?]*[.!?]?)', '', msg)
-        msg = re.sub(r'(?i)(звоните[^\n.!?]*[.!?]?)', '', msg)
-        msg = re.sub(r'(?i)(пишите[^\n.!?]*[.!?]?)', '', msg)
-        msg = re.sub(r'(?i)(для уточнения деталей[^\n.!?]*[.!?]?)', '', msg)
-        msg = re.sub(r'(?i)(контакты[^\n.!?]*[.!?]?)', '', msg)
-        msg = re.sub(r'\n\n+', '\n\n', msg)  # чистим лишние пустые строки
+        # Удаляем нежелательные фразы
+        phrases_to_remove = [
+            r'(?i)приглашаем[^\n.!?]*на просмотр[^\n.!?]*',
+            r'(?i)звоните[^\n.!?]*',
+            r'(?i)пишите[^\n.!?]*',
+            r'(?i)для уточнения деталей[^\n.!?]*',
+            r'(?i)контакты[^\n.!?]*',
+            r'(?i)свяжитесь[^\n.!?]*для подробностей[^\n.!?]*',
+            r'(?i)записи на тест-драйв[^\n.!?]*',
+            r'(?i)посмотреть автомобиль[^\n.!?]*'
+        ]
+        for phrase in phrases_to_remove:
+            msg = re.sub(phrase, '', msg)
+
+        msg = re.sub(r'\n\n+', '\n\n', msg).strip()  # чистим лишние пустые строки и пробелы
 
         print(">> Отправка сообщения в Telegram...")
         await send_message_with_photos_to_channel(msg, photos)
