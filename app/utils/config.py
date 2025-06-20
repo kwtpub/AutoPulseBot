@@ -25,4 +25,22 @@ def get_telegram_config():
             print(f"Предупреждение: Неверное значение для start_from_id в config.ini: '{start_from_id_str}'. Будет проигнорировано.")
             start_from_id = None
             
-    return limit, start_from_id 
+    return limit, start_from_id
+
+def get_pricing_config():
+    """Возвращает параметры из секции [pricing]."""
+    config = get_config()
+    markup = config.getfloat('pricing', 'markup_percentage', fallback=0)
+    return markup
+
+def get_application_config():
+    """Возвращает параметры из секции [application]."""
+    config = get_config()
+    button_text = config.get('application', 'button_text', fallback=None)
+    button_url = config.get('application', 'button_url', fallback=None)
+    
+    # Не возвращаем текст, если нет URL
+    if not button_url or not button_url.strip():
+        return None, None
+        
+    return button_text, button_url 
