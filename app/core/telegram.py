@@ -97,15 +97,11 @@ async def send_message_with_photos_to_channel(message: str, photo_paths: list, b
 
     client = TelegramClient('session', api_id, api_hash)
     await client.start(phone=phone)
-    # Если есть фото
+
+    # Всегда отправляем текст с кнопкой первым сообщением
+    await client.send_message(channel_id, message, buttons=buttons)
+    # Потом отправляем все фото (без подписи и кнопки)
     if photo_paths:
-        if len(message) > 1024:
-            # Сначала отправляем текст, потом фото без подписи, но с кнопкой
-            await client.send_message(channel_id, message)
-            await client.send_file(channel_id, photo_paths, silent=False, buttons=buttons)
-        else:
-            # Можно отправить как подпись к первой фотке
-            await client.send_file(channel_id, photo_paths, caption=message, silent=False, buttons=buttons)
-    else:
-        await client.send_message(channel_id, message, buttons=buttons)
+        await client.send_file(channel_id, photo_paths, silent=False)
+
     await client.disconnect() 

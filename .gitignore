@@ -12,8 +12,7 @@ config.ini
 !.gitkeep
 
 mcp.json
-app/__pycache__/
-app/core/__pycache__/
-app/utils/__pycache__/
+__pycache__/
 myenv/
 temp/*
+to-do
