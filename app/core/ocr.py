@@ -108,4 +108,4 @@ def blip_image_caption(image_path):
     inputs = processor(raw_image, return_tensors="pt")
     out = model.generate(**inputs)
     caption = processor.decode(out[0], skip_special_tokens=True)
-    return caption 
+    return caption

@@ -85,3 +85,36 @@ async def fetch_announcements_from_channel(source_channel, limit=10, download_di
     await client.disconnect()
     print(f"Найдено и отобрано {len(final_announcements)} объявлений.")
     return final_announcements 
+
+async def convert_telethon_message_to_announcement(message):
+    """
+    Преобразует объект сообщения Telethon в формат словаря 'announcement'.
+    Скачивает фото во временную папку.
+    """
+    # Создаем уникальную временную папку для этого сообщения
+    temp_dir = os.path.join('downloads', str(message.id))
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    photo_paths = []
+    # Telethon может сгруппировать фото. Нужно скачать все.
+    # Проверяем, есть ли у сообщения grouped_id.
+    # Эта логика пока упрощена и может быть улучшена для более надежной работы с альбомами.
+    try:
+        if message.photo:
+            photo_path = await message.download_media(file=os.path.join(temp_dir, f"{message.id}.jpg"))
+            photo_paths.append(photo_path)
+    except Exception as e:
+        print(f"Не удалось скачать медиа для сообщения {message.id}: {e}")
+
+    text = message.text or ""
+    
+    if not text and not photo_paths:
+        # Если нет ни текста, ни фото, объявление бесполезно
+        shutil.rmtree(temp_dir)
+        return None
+
+    return {
+        "id": message.id,
+        "text": text,
+        "photos": photo_paths
+    } 

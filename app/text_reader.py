@@ -28,4 +28,4 @@ async def fetch_text_messages_from_channel(source_channel, limit=500):
             })
     await client.disconnect()
     print(f"Найдено текстовых сообщений: {len(messages)}")
-    return messages 
+    return messages
