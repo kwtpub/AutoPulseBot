@@ -33,6 +33,16 @@ def get_pricing_config():
     markup = config.getfloat('pricing', 'markup_percentage', fallback=0)
     return markup
 
+def set_pricing_config(markup_percentage: float):
+    """Устанавливает и сохраняет процент наценки в config.ini."""
+    config = get_config()
+    if 'pricing' not in config:
+        config.add_section('pricing')
+    config.set('pricing', 'markup_percentage', str(markup_percentage))
+    
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as configfile:
+        config.write(configfile)
+
 def get_application_config():
     """Возвращает параметры из секции [application]."""
     config = get_config()
