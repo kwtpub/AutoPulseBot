@@ -10,6 +10,33 @@ from app.utils.config import get_telegram_config, get_pricing_config
 import re
 import sys
 import shutil
+import random
+from app.bot.database import SessionLocal, Car
+
+def extract_car_details(text: str):
+    """Извлекает детали автомобиля из текста с помощью регулярных выражений."""
+    details = {
+        'brand': None,
+        'model': None,
+        'year': None,
+        'price': None
+    }
+    title_match = re.search(r'^(.*?)\s*\[(\d{4})\]', text)
+    if title_match:
+        full_model_name = title_match.group(1).strip()
+        brand_model_parts = full_model_name.split(' ', 1)
+        details['brand'] = brand_model_parts[0]
+        details['model'] = brand_model_parts[1] if len(brand_model_parts) > 1 else None
+        details['year'] = int(title_match.group(2))
+
+    price_match = re.search(r'(?i)Цена:\s*([\d\s,]+)', text)
+    if price_match:
+        try:
+            price_str = price_match.group(1).replace(' ', '').replace(',', '')
+            details['price'] = float(price_str)
+        except (ValueError, TypeError):
+            details['price'] = None
+    return details
 
 async def process_all_cars_from_channel():
     print(">>> Запуск конвейера обработки автомобилей...")
@@ -34,57 +61,60 @@ async def process_all_cars_from_channel():
     perplexity = PerplexityProcessor(api_key)
     formatter = MessageFormatter()
 
-    for idx, ann in enumerate(announcements, 1):
-        print(f"\n--- Обработка объявления {idx}/{len(announcements)} ---")
-        text = ann["text"]
-        photos = ann["photos"]
-        temp_dir = ann["temp_dir"]
-        message_id = ann["id"]
+    db = SessionLocal()
 
-        # Ограничиваем количество фото максимум 8
-        photos = photos[:8]
+    try:
+        for idx, ann in enumerate(announcements, 1):
+            print(f"\n--- Обработка объявления {idx}/{len(announcements)} ---")
+            text = ann["text"]
+            photos = ann["photos"]
+            temp_dir = ann["temp_dir"]
+            message_id = ann["id"]
 
-        # OCR для всех фото, объединяем результаты
-        ocr_texts = []
-        if photos:
-            print(f">> Запуск OCR для {len(photos)} фото...")
-        for photo_path in photos:
-            ocr = OCRProcessor(lang='ru', use_yandex=True)
-            ocr_text = ocr.extract_text(photo_path)
-            print(f"OCR результат для {photo_path}:", ocr_text)
-            if not ocr_text.strip() or ocr_text.startswith('Ошибка разбора ответа'):
-                continue
-            ocr_texts.append(ocr_text)
-        ocr_data = '\n'.join(ocr_texts)
-        if ocr_data:
-            print(">> OCR завершен. Результат получен.")
+            # Ограничиваем количество фото максимум 8
+            photos = photos[:8]
 
-        # Попытка извлечь основные данные для заголовка и цены
-        full_text_for_parsing = f"{text}\n{ocr_data}"
-        
-        brand_model_match = re.search(r'(?i)(?:Марка и модель|Продаётся|автомобиль)\s*([A-Z-a-z\s]+)', full_text_for_parsing)
-        year_match = re.search(r'(?i)Год выпуска:?\s*(\d{4})', full_text_for_parsing)
-        price_match = re.search(r'(?i)(?:Цена|Стоимость):?\s*([\d\s,]+)', full_text_for_parsing)
-        
-        title_model = brand_model_match.group(1).strip() if brand_model_match else ""
-        title_year = year_match.group(1).strip() if year_match else ""
-        price_instruction = ""
+            # OCR для всех фото, объединяем результаты
+            ocr_texts = []
+            if photos:
+                print(f">> Запуск OCR для {len(photos)} фото...")
+            for photo_path in photos:
+                ocr = OCRProcessor(lang='ru', use_yandex=True)
+                ocr_text = ocr.extract_text(photo_path)
+                print(f"OCR результат для {photo_path}:", ocr_text)
+                if not ocr_text.strip() or ocr_text.startswith('Ошибка разбора ответа'):
+                    continue
+                ocr_texts.append(ocr_text)
+            ocr_data = '\n'.join(ocr_texts)
+            if ocr_data:
+                print(">> OCR завершен. Результат получен.")
 
-        if price_match:
-            try:
-                original_price_str = price_match.group(1).replace(' ', '').replace(',', '')
-                original_price = float(original_price_str)
-                final_price = original_price * (1 + markup_percentage / 100)
-                final_price_str = f"{int(final_price):,}".replace(",", " ")
-                price_instruction = f"- Итоговая цена (уже с наценкой): {final_price_str}"
-            except (ValueError, TypeError):
-                print(f"Не удалось распознать цену: {price_match.group(1)}")
-                price_instruction = "- Цена: Не найдена в тексте. Твоя задача — найти актуальную рыночную цену для этого автомобиля в интернете."
-        else:
-             price_instruction = "- Цена: Не найдена в тексте. Твоя задача — найти актуальную рыночную цену для этого автомобиля в интернете."
+            # Попытка извлечь основные данные для заголовка и цены
+            full_text_for_parsing = f"{text}\n{ocr_data}"
+            
+            brand_model_match = re.search(r'(?i)(?:Марка и модель|Продаётся|автомобиль)\s*([A-Z-a-z\s]+)', full_text_for_parsing)
+            year_match = re.search(r'(?i)Год выпуска:?\s*(\d{4})', full_text_for_parsing)
+            price_match = re.search(r'(?i)(?:Цена|Стоимость):?\s*([\d\s,]+)', full_text_for_parsing)
+            
+            title_model = brand_model_match.group(1).strip() if brand_model_match else ""
+            title_year = year_match.group(1).strip() if year_match else ""
+            price_instruction = ""
 
-        # Формируем промпт для Perplexity
-        prompt = f"""
+            if price_match:
+                try:
+                    original_price_str = price_match.group(1).replace(' ', '').replace(',', '')
+                    original_price = float(original_price_str)
+                    final_price = original_price * (1 + markup_percentage / 100)
+                    final_price_str = f"{int(final_price):,}".replace(",", " ")
+                    price_instruction = f"- Итоговая цена (уже с наценкой): {final_price_str}"
+                except (ValueError, TypeError):
+                    print(f"Не удалось распознать цену: {price_match.group(1)}")
+                    price_instruction = "- Цена: Не найдена в тексте. Твоя задача — найти актуальную рыночную цену для этого автомобиля в интернете."
+            else:
+                 price_instruction = "- Цена: Не найдена в тексте. Твоя задача — найти актуальную рыночную цену для этого автомобиля в интернете."
+
+            # Формируем промпт для Perplexity
+            prompt = f"""
 Ты — эксперт по созданию продающих текстов для Telegram-каналов с продажей автомобилей.
 
 Твоя задача — на основе предоставленных данных об автомобиле создать красивое, удобное и адаптированное под поисковые запросы объявление.
@@ -123,37 +153,85 @@ async def process_all_cars_from_channel():
 Текст изначального объявления:
 {text}
 """
-        # Отправляем в Perplexity и сразу публикуем ответ
-        print(">> Отправка запроса в Perplexity API...")
-        msg = await perplexity.process_text(prompt)
-        print(">> Ответ от Perplexity получен.")
-        print(f"\n--- Сообщение для объявления {idx} ---\n{msg}\n")
+            # Отправляем в Perplexity и сразу публикуем ответ
+            print(">> Отправка запроса в Perplexity API...")
+            msg = await perplexity.process_text(prompt)
+            print(">> Ответ от Perplexity получен.")
+            print(f"\n--- Сообщение для объявления {idx} ---\n{msg}\n")
 
-        # Удаляем нежелательные фразы
-        phrases_to_remove = [
-            r'(?i)приглашаем[^\n.!?]*на просмотр[^\n.!?]*',
-            r'(?i)звоните[^\n.!?]*',
-            r'(?i)пишите[^\n.!?]*',
-            r'(?i)для уточнения деталей[^\n.!?]*',
-            r'(?i)контакты[^\n.!?]*',
-            r'(?i)свяжитесь[^\n.!?]*для подробностей[^\n.!?]*',
-            r'(?i)записи на тест-драйв[^\n.!?]*',
-            r'(?i)посмотреть автомобиль[^\n.!?]*'
-        ]
-        for phrase in phrases_to_remove:
-            msg = re.sub(phrase, '', msg)
+            # Удаляем нежелательные фразы
+            phrases_to_remove = [
+                r'(?i)приглашаем[^\n.!?]*на просмотр[^\n.!?]*',
+                r'(?i)звоните[^\n.!?]*',
+                r'(?i)пишите[^\n.!?]*',
+                r'(?i)для уточнения деталей[^\n.!?]*',
+                r'(?i)контакты[^\n.!?]*',
+                r'(?i)свяжитесь[^\n.!?]*для подробностей[^\n.!?]*',
+                r'(?i)записи на тест-драйв[^\n.!?]*',
+                r'(?i)посмотреть автомобиль[^\n.!?]*'
+            ]
+            for phrase in phrases_to_remove:
+                msg = re.sub(phrase, '', msg)
 
-        msg = re.sub(r'\n\n+', '\n\n', msg).strip()  # чистим лишние пустые строки и пробелы
+            msg = re.sub(r'\n\n+', '\n\n', msg).strip()  # чистим лишние пустые строки и пробелы
 
-        print(">> Отправка сообщения в Telegram...")
-        await send_message_with_photos_to_channel(msg, photos)
-        print(f">> Сообщение для объявления {idx} успешно отправлено.")
+            # --- ГЕНЕРАЦИЯ УНИКАЛЬНОГО ID ---
+            custom_id = str(random.randint(10000000, 99999999))
+            # Убедимся, что ID действительно уникален
+            while db.query(Car).filter(Car.custom_id == custom_id).first():
+                custom_id = str(random.randint(10000000, 99999999))
+            print(f">> Сгенерирован уникальный ID для поста: {custom_id}")
+            # --- КОНЕЦ ГЕНЕРАЦИИ ---
 
-    # После отправки всех сообщений — удалить temp
-    temp_dir = 'temp'
-    if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir)
-    print(">>> Конвейер завершил работу.")
+            # --- ПРЕДВАРИТЕЛЬНОЕ СОХРАНЕНИЕ В БД ---
+            car_details = extract_car_details(msg)
+            new_car = Car(
+                custom_id=custom_id,
+                source_message_id=message_id,
+                source_channel_name=source_channel,
+                brand=car_details.get('brand'),
+                model=car_details.get('model'),
+                year=car_details.get('year'),
+                price=car_details.get('price'),
+                description=msg,
+                status='pending_publication' # Временный статус
+            )
+            db.add(new_car)
+            db.commit()
+            db.refresh(new_car)
+            print(f">> Автомобиль предварительно сохранен в базу с ID {new_car.id}.")
+            # --- КОНЕЦ ПРЕДВАРИТЕЛЬНОГО СОХРАНЕНИЯ ---
+
+            # --- ПУБЛИКАЦИЯ И ОБНОВЛЕНИЕ В БД ---
+            print(">> Отправка сообщения в Telegram...")
+            target_msg_id, photo_ids = await send_message_with_photos_to_channel(msg, photos)
+            
+            if target_msg_id:
+                # Обновляем запись в базе, добавляя ID из Telegram
+                new_car.target_channel_message_id = target_msg_id
+                new_car.photos = photo_ids # Сохраняем file_id
+                new_car.status = 'available'
+                db.commit()
+                print(f">> Пост опубликован. Запись в БД обновлена (ID поста: {target_msg_id}).")
+            else:
+                # Если публикация не удалась, удаляем запись из БД
+                print(">> Публикация не удалась. Откат записи в БД.")
+                db.delete(new_car)
+                db.commit()
+            # --- КОНЕЦ ПУБЛИКАЦИИ И ОБНОВЛЕНИЯ ---
+
+    finally:
+        db.close()
+        # После отправки всех сообщений — удалить temp
+        temp_dir = 'temp'
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        # Временная папка 'downloads' создается в channel_parser.py
+        downloads_dir = 'downloads'
+        if os.path.exists(downloads_dir):
+            shutil.rmtree(downloads_dir)
+            print(">>> Временная папка 'downloads' удалена.")
+        print(">>> Конвейер завершил работу.")
 
 if __name__ == "__main__":
     asyncio.run(process_all_cars_from_channel()) 

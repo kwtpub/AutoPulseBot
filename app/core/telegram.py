@@ -82,31 +82,43 @@ async def fetch_text_photo_pairs(source_channel, limit=500, download_dir="downlo
     await client.disconnect()
     return pairs
 
-async def send_message_with_photos_to_channel(message: str, photo_paths: list):
+async def send_message_with_photos_to_channel(text: str, photo_paths: list):
     """
-    Отправляет сообщение с фото в канал в виде альбома.
+    Отправляет пост с фотографиями и текстом в целевой канал.
+    Возвращает ID созданного поста и список file_id фотографий.
     """
     load_dotenv()
-    api_id = int(os.getenv("TELEGRAM_API_ID"))
+    api_id = os.getenv("TELEGRAM_API_ID")
     api_hash = os.getenv("TELEGRAM_API_HASH")
-    phone = os.getenv("TELEGRAM_PHONE")
-    channel_id = os.getenv("TELEGRAM_CHANNEL_ID")
+    session_name = "telegram_session"
+    target_channel_id = int(os.getenv("TARGET_CHANNEL_ID"))
 
-    client = TelegramClient('session', api_id, api_hash)
-    await client.start(phone=phone)
+    async with TelegramClient(session_name, api_id, api_hash) as client:
+        try:
+            # Отправляем пост
+            if not photo_paths:
+                sent_message = await client.send_message(target_channel_id, text)
+                photo_file_ids = []
+            else:
+                sent_message = await client.send_file(target_channel_id, photo_paths, caption=text)
+                # Если это альбом, sent_message будет списком. Берем первый для ID.
+                # Все фото из альбома будут сгруппированы под ID первого сообщения.
+                message_to_process = sent_message[0] if isinstance(sent_message, list) else sent_message
+                
+                # Извлекаем file_id для каждой фотографии
+                photo_file_ids = []
+                if isinstance(sent_message, list):
+                    for msg in sent_message:
+                        if msg.media and hasattr(msg.media, 'photo'):
+                            photo_file_ids.append(msg.media.photo.id)
+                elif sent_message.media and hasattr(sent_message.media, 'photo'):
+                     photo_file_ids.append(sent_message.media.photo.id)
 
-    try:
-        if not photo_paths:
-            # Если фото нет, просто отправляем текст
-            await client.send_message(channel_id, message)
-        else:
-            # Отправляем все фото как альбом с одной подписью
-            await client.send_file(
-                channel_id,
-                photo_paths,
-                caption=message
-            )
-    except Exception as e:
-        print(f"Ошибка при отправке сообщения в Telegram: {e}")
-    finally:
-        await client.disconnect() 
+            target_message_id = message_to_process.id
+            
+            print(f">> Пост успешно отправлен в канал. ID поста: {target_message_id}")
+            return target_message_id, photo_file_ids
+
+        except Exception as e:
+            print(f"❌ Ошибка при отправке сообщения в Telegram: {e}")
+            return None, None 
