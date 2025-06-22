@@ -16,3 +16,6 @@ __pycache__/
 myenv/
 temp/*
 to-do
+
+
+telegram_session.session
