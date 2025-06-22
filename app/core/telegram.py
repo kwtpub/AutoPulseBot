@@ -10,6 +10,13 @@ async def send_message_to_channel(message: str, button_text: str = None, button_
     api_hash = os.getenv("TELEGRAM_API_HASH")
     phone = os.getenv("TELEGRAM_PHONE")
     channel_id = os.getenv("TELEGRAM_CHANNEL_ID")
+    
+    # Поддержка как числовых ID, так и username каналов
+    try:
+        channel_id = int(channel_id)
+    except (ValueError, TypeError):
+        # Если не число, значит это username канала
+        pass
 
     buttons = None
     if button_text and button_url:
@@ -91,7 +98,19 @@ async def send_message_with_photos_to_channel(text: str, photo_paths: list):
     api_id = os.getenv("TELEGRAM_API_ID")
     api_hash = os.getenv("TELEGRAM_API_HASH")
     session_name = "telegram_session"
-    target_channel_id = int(os.getenv("TARGET_CHANNEL_ID"))
+    target_channel = os.getenv("TARGET_CHANNEL_ID")
+    
+    # Поддержка как числовых ID, так и username каналов
+    try:
+        target_channel_id = int(target_channel)
+    except (ValueError, TypeError):
+        # Если не число, значит это username канала
+        target_channel_id = target_channel
+
+    # Обрезаем текст до допустимой длины подписи Telegram (1024 символа)
+    max_caption_length = 1024
+    if len(text) > max_caption_length:
+        text = text[:max_caption_length-3] + "..."
 
     async with TelegramClient(session_name, api_id, api_hash) as client:
         try:

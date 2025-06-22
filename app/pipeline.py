@@ -21,13 +21,21 @@ def extract_car_details(text: str):
         'year': None,
         'price': None
     }
+    
+    if not text or not isinstance(text, str):
+        return details
+        
     title_match = re.search(r'^(.*?)\s*\[(\d{4})\]', text)
     if title_match:
-        full_model_name = title_match.group(1).strip()
-        brand_model_parts = full_model_name.split(' ', 1)
-        details['brand'] = brand_model_parts[0]
-        details['model'] = brand_model_parts[1] if len(brand_model_parts) > 1 else None
-        details['year'] = int(title_match.group(2))
+        try:
+            full_model_name = title_match.group(1).strip()
+            brand_model_parts = full_model_name.split(' ', 1)
+            details['brand'] = brand_model_parts[0]
+            details['model'] = brand_model_parts[1] if len(brand_model_parts) > 1 else None
+            details['year'] = int(title_match.group(2))
+        except (ValueError, IndexError) as e:
+            print(f"Ошибка при извлечении года из текста: {e}")
+            details['year'] = None
 
     price_match = re.search(r'(?i)Цена:\s*([\d\s,]+)', text)
     if price_match:
@@ -76,6 +84,15 @@ async def process_single_announcement(ann, db_session, perplexity_processor, sou
     print(">> Отправка запроса в Perplexity API...")
     msg = await perplexity_processor.process_text(prompt)
     print(">> Ответ от Perplexity получен.")
+
+    # Проверяем, что получили корректный ответ
+    if not msg or not isinstance(msg, str):
+        print(">> Получен некорректный ответ от Perplexity. Пропускаем объявление.")
+        if ann.get("photos"):
+            photo_dir = os.path.dirname(ann["photos"][0])
+            if os.path.exists(photo_dir):
+                shutil.rmtree(photo_dir)
+        return
 
     car_details = extract_car_details(msg)
     new_car = Car(

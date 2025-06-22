@@ -7,6 +7,8 @@ from transformers import BlipProcessor, BlipForConditionalGeneration
 import requests
 import base64
 from dotenv import load_dotenv
+from app.core.yandex_auth import check_and_refresh_iam_token
+import os
 
 class OCRProcessor:
     def __init__(self, lang='en', use_paddle=False, use_yandex=False):
@@ -20,11 +22,10 @@ class OCRProcessor:
             self.paddle_ocr = None
         if use_yandex:
             load_dotenv()
-            import os
             self.yandex_token = os.getenv('YANDEX_IAM_TOKEN')
             self.yandex_folder_id = os.getenv('YANDEX_FOLDER_ID')
         
-    def yandex_ocr(self, image_path):
+    async def yandex_ocr(self, image_path):
         with open(image_path, "rb") as f:
             img_data = f.read()
         img_b64 = base64.b64encode(img_data).decode("utf-8")
@@ -42,8 +43,23 @@ class OCRProcessor:
                 }]
             }]
         }
-        response = requests.post(url, json=body, headers=headers)
-        response.raise_for_status()
+        
+        try:
+            response = requests.post(url, json=body, headers=headers)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                print("IAM токен истёк. Обновляю...")
+                await check_and_refresh_iam_token()
+                # Обновляем токен в объекте
+                self.yandex_token = os.getenv('YANDEX_IAM_TOKEN')
+                headers = {"Authorization": f"Bearer {self.yandex_token}"}
+                # Повторяем запрос с новым токеном
+                response = requests.post(url, json=body, headers=headers)
+                response.raise_for_status()
+            else:
+                raise e
+        
         result = response.json()
         try:
             text_blocks = result['results'][0]['results'][0]['textDetection']['pages'][0].get('blocks', [])
@@ -75,9 +91,9 @@ class OCRProcessor:
         cv2.imwrite(processed_path, denoised)
         return processed_path
         
-    def extract_text(self, image_path, preprocess=True):
+    async def extract_text(self, image_path, preprocess=True):
         if self.use_yandex:
-            return self.yandex_ocr(image_path)
+            return await self.yandex_ocr(image_path)
         if self.use_paddle:
             # PaddleOCR не требует препроцессинга
             result = self.paddle_ocr.ocr(image_path, cls=True)

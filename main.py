@@ -14,7 +14,7 @@ from telethon import TelegramClient, events
 
 # --- Наши модули ---
 from app.bot.database import init_db, save_application, SessionLocal, Car, Application as ApplicationDB
-from app.utils.channel_parser import convert_telethon_message_to_announcement
+from app.utils.channel_parser import convert_telethon_message_to_announcement, fetch_announcements_from_channel
 from app.pipeline import process_single_announcement
 from app.core.perplexity import PerplexityProcessor
 from app.utils.config import get_pricing_config, set_pricing_config
@@ -56,7 +56,7 @@ perplexity_processor = PerplexityProcessor(PERPLEXITY_API_KEY)
 MARKUP_PERCENTAGE = get_pricing_config()
 
 # Состояния для диалога
-SET_MARKUP = range(1)
+SET_MARKUP, PARSER_CHANNEL, PARSER_COUNT = range(3)
 
 # --- Клиент Telethon для прослушивания ---
 client = TelegramClient(
@@ -97,6 +97,7 @@ async def get_admin_keyboard():
         [InlineKeyboardButton("📊 Статистика", callback_data='admin_stats')],
         [InlineKeyboardButton("💰 Установить наценку %", callback_data='admin_set_markup')],
         [InlineKeyboardButton("📡 Каналы-источники", callback_data='admin_source_channels')],
+        [InlineKeyboardButton("🔍 Парсер каналов", callback_data='admin_parser')],
     ])
 
 async def get_back_keyboard():
@@ -172,6 +173,17 @@ async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
+    # Логика для парсера каналов
+    elif query.data == 'admin_parser':
+        await query.answer()
+        await query.edit_message_text(
+            text="🔍 **Парсер каналов**\n\n"
+                 f"Введите канал для парсинга (например: @milkos44556):",
+            parse_mode='Markdown',
+            reply_markup=await get_back_keyboard()
+        )
+        return PARSER_CHANNEL
+
     # Логика для возврата в главное меню
     elif query.data == 'admin_back_to_main':
         await query.answer()
@@ -198,57 +210,222 @@ async def handle_set_markup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = await get_admin_keyboard()
     
     try:
-        new_markup = float(update.message.text.replace(',', '.'))
-        set_pricing_config(new_markup)
+        new_markup = float(update.message.text)
+        if new_markup < 0 or new_markup > 100:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=admin_message_id,
+                text="❌ Наценка должна быть от 0 до 100%. Попробуйте снова:",
+                reply_markup=reply_markup
+            )
+            return SET_MARKUP
+        
         MARKUP_PERCENTAGE = new_markup
+        set_pricing_config(new_markup)
         
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=admin_message_id,
-            text=f"✅ Наценка успешно изменена на {new_markup}%."
+            text=f"✅ Наценка успешно установлена: **{new_markup}%**",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
         )
-    except (ValueError, Exception) as e:
-        error_message = "❌ Ошибка. Пожалуйста, введите число."
-        if not isinstance(e, ValueError):
-            error_message = f"❌ Произошла ошибка при сохранении: {e}"
         
+    except ValueError:
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=admin_message_id,
-            text=error_message
+            text="❌ Введите корректное число (например: 10 или 12.5):",
+            reply_markup=reply_markup
         )
+        return SET_MARKUP
+    
+    return ConversationHandler.END
 
-    # Ждем 3 секунды и возвращаемся в главное меню
-    await asyncio.sleep(3)
+async def handle_parser_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод канала для парсинга."""
+    admin_message_id = context.user_data.get('admin_message_id')
+    chat_id = update.effective_chat.id
+    
+    # Удаляем сообщение пользователя
+    await update.message.delete()
+    
+    if not admin_message_id:
+        await context.bot.send_message(chat_id=chat_id, text="Не удалось найти сообщение для редактирования. Пожалуйста, вызовите /admin снова.")
+        return ConversationHandler.END
+    
+    channel = update.message.text.strip()
+    
+    # Проверяем формат канала
+    if not channel.startswith('@') and not channel.startswith('https://t.me/'):
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=admin_message_id,
+            text="❌ Неверный формат канала. Используйте @username или https://t.me/username\n\nПопробуйте снова:",
+            reply_markup=await get_back_keyboard()
+        )
+        return PARSER_CHANNEL
+    
+    # Сохраняем канал в контексте
+    context.user_data['parser_channel'] = channel
+    
     await context.bot.edit_message_text(
         chat_id=chat_id,
         message_id=admin_message_id,
-        text="⚙️ Админ-панель:",
-        reply_markup=reply_markup
+        text=f"🔍 **Парсер каналов**\n\n"
+             f"Канал: `{channel}`\n\n"
+             f"Введите количество последних сообщений для парсинга (например: 100):",
+        parse_mode='Markdown',
+        reply_markup=await get_back_keyboard()
     )
     
-    return ConversationHandler.END
+    return PARSER_COUNT
 
-async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отменяет текущий диалог, редактируя сообщение."""
-    await update.message.delete() # Удаляем команду /cancel
+async def handle_parser_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод количества сообщений и запускает парсинг."""
     admin_message_id = context.user_data.get('admin_message_id')
     chat_id = update.effective_chat.id
-
-    if admin_message_id:
-        reply_markup = await get_admin_keyboard()
+    
+    # Удаляем сообщение пользователя
+    await update.message.delete()
+    
+    if not admin_message_id:
+        await context.bot.send_message(chat_id=chat_id, text="Не удалось найти сообщение для редактирования. Пожалуйста, вызовите /admin снова.")
+        return ConversationHandler.END
+    
+    try:
+        count = int(update.message.text)
+        if count <= 0 or count > 1000:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=admin_message_id,
+                text="❌ Количество должно быть от 1 до 1000. Попробуйте снова:",
+                reply_markup=await get_back_keyboard()
+            )
+            return PARSER_COUNT
+    except ValueError:
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=admin_message_id,
-            text="Действие отменено. Возврат в меню.",
-            reply_markup=reply_markup
+            text="❌ Введите корректное число. Попробуйте снова:",
+            reply_markup=await get_back_keyboard()
+        )
+        return PARSER_COUNT
+    
+    channel = context.user_data.get('parser_channel')
+    
+    # Запускаем парсинг
+    await context.bot.edit_message_text(
+        chat_id=chat_id,
+        message_id=admin_message_id,
+        text=f"🔍 **Запуск парсинга...**\n\n"
+             f"Канал: `{channel}`\n"
+             f"Количество: {count} сообщений\n\n"
+             f"⏳ Обрабатываю...",
+        parse_mode='Markdown',
+        reply_markup=await get_back_keyboard()
+    )
+    
+    try:
+        # Запускаем парсинг в фоне
+        asyncio.create_task(run_parser_task(context, channel, count, admin_message_id, chat_id))
+    except Exception as e:
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=admin_message_id,
+            text=f"❌ **Ошибка запуска парсера:**\n\n{str(e)}",
+            parse_mode='Markdown',
+            reply_markup=await get_admin_keyboard()
         )
     
     return ConversationHandler.END
 
+async def run_parser_task(context, channel, count, message_id, chat_id):
+    """Выполняет парсинг канала в фоновом режиме."""
+    db_session = SessionLocal()
+    try:
+        # Запускаем парсинг
+        announcements = await fetch_announcements_from_channel(channel, limit=count)
+        
+        if not announcements:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=f"🔍 **Результат парсинга**\n\n"
+                     f"Канал: `{channel}`\n"
+                     f"Найдено объявлений: 0\n\n"
+                     f"ℹ️ Объявления не найдены или канал недоступен.",
+                parse_mode='Markdown',
+                reply_markup=await get_admin_keyboard()
+            )
+            return
+        
+        # Обрабатываем найденные объявления
+        processed_count = 0
+        for announcement in announcements:
+            try:
+                await process_single_announcement(
+                    ann=announcement,
+                    db_session=db_session,
+                    perplexity_processor=perplexity_processor,
+                    source_channel=channel,
+                    markup_percentage=MARKUP_PERCENTAGE
+                )
+                processed_count += 1
+            except Exception as e:
+                print(f"Ошибка обработки объявления: {e}")
+        
+        # Обновляем сообщение с результатами
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=f"✅ **Парсинг завершен!**\n\n"
+                 f"Канал: `{channel}`\n"
+                 f"Найдено объявлений: {len(announcements)}\n"
+                 f"Обработано успешно: {processed_count}\n\n"
+                 f"🚗 Объявления добавлены в каталог.",
+            parse_mode='Markdown',
+            reply_markup=await get_admin_keyboard()
+        )
+        
+    except Exception as e:
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=f"❌ **Ошибка парсинга:**\n\n{str(e)}",
+            parse_mode='Markdown',
+            reply_markup=await get_admin_keyboard()
+        )
+    finally:
+        db_session.close()
+
 # --- Обработчики команд бота (python-telegram-bot) ---
+async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отменяет текущий диалог и возвращает в админ-панель."""
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_USER_IDS:
+        await update.message.reply_text("⛔️ Доступ запрещен.")
+        return ConversationHandler.END
+    
+    await update.message.reply_text("❌ Операция отменена.", reply_markup=await get_admin_keyboard())
+    return ConversationHandler.END
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Здравствуйте! Присылайте вашу заявку, и она будет передана менеджеру.")
+
+async def chatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Возвращает ID чата для настройки конфигурации."""
+    chat_id = update.effective_chat.id
+    chat_type = update.effective_chat.type
+    chat_title = update.effective_chat.title or "Личный чат"
+    
+    await update.message.reply_text(
+        f"📋 **Информация о чате:**\n\n"
+        f"🆔 Chat ID: `{chat_id}`\n"
+        f"📝 Тип: {chat_type}\n"
+        f"📛 Название: {chat_title}",
+        parse_mode='Markdown'
+    )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -283,14 +460,28 @@ def main():
         per_message=False # Важно для работы с одним сообщением
     )
 
+    # Диалог для парсера каналов
+    parser_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_callbacks, pattern='^admin_parser$')],
+        states={
+            PARSER_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_channel)],
+            PARSER_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_count)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel_conversation)],
+        per_message=False
+    )
+
     application.add_handler(conv_handler)
+    application.add_handler(parser_conv_handler)
 
     # Админ-команды
     application.add_handler(CommandHandler("admin", admin_panel))
-    application.add_handler(CallbackQueryHandler(admin_callbacks, pattern='^admin_')) # Ловит все остальные admin коллбэки
+    # Обработчик для остальных админ-коллбэков (кроме тех, что обрабатываются ConversationHandler)
+    application.add_handler(CallbackQueryHandler(admin_callbacks, pattern='^admin_(stats|source_channels|back_to_main)$'))
 
     # Пользовательские команды
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("chatid", chatid))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Запускаем все вместе. `run_polling` блокирующий,

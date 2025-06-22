@@ -73,6 +73,7 @@ async def fetch_announcements_from_channel(source_channel, limit=10, download_di
                     photo_paths.append(dest)
                 
                 announcements.append({
+                    "id": msg.id,
                     "text": msg.text,
                     "photos": photo_paths,
                     "temp_dir": car_temp_dir
