@@ -71,4 +71,4 @@ class PerplexityProcessor:
                     return result['choices'][0]['message']['content']
                 else:
                     error_text = await response.text()
-                    raise Exception(f'Perplexity API error: {response.status} {error_text}') 
+                    raise Exception(f'Perplexity API error: {response.status} {error_text}')

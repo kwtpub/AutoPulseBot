@@ -1,0 +1,57 @@
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | myenv
+  | \.taskmaster
+  | \.cursor
+  | \.roo
+  | downloads
+  | temp
+  | logs
+  | __pycache__
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["app"]
+known_third_party = [
+    "telethon",
+    "telegram",
+    "pytesseract",
+    "PIL",
+    "cv2",
+    "numpy",
+    "paddleocr",
+    "transformers",
+    "requests",
+    "torch",
+    "sqlalchemy",
+    "watchdog",
+    "aiohttp",
+    "dotenv",
+    "loguru",
+    "asyncio",
+    "os",
+    "sys",
+    "re",
+    "shutil",
+    "random",
+    "time",
+    "base64",
+    "json",
+    "datetime"
+] 

@@ -118,7 +118,7 @@ async def send_message_with_photos_to_channel(text: str, photo_paths: list):
             if not photo_paths:
                 sent_message = await client.send_message(target_channel_id, text)
                 photo_file_ids = []
-            else:
+        else:
                 sent_message = await client.send_file(target_channel_id, photo_paths, caption=text)
                 # Если это альбом, sent_message будет списком. Берем первый для ID.
                 # Все фото из альбома будут сгруппированы под ID первого сообщения.

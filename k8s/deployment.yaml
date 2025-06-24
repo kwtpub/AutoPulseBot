@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-auto-post-bot
+  labels:
+    app: telegram-auto-post-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telegram-auto-post-bot
+  template:
+    metadata:
+      labels:
+        app: telegram-auto-post-bot
+    spec:
+      containers:
+      - name: telegram-bot
+        image: telegram-auto-post-bot:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: telegram-bot-secrets
+              key: bot-token
+        - name: TELEGRAM_API_ID
+          valueFrom:
+            secretKeyRef:
+              name: telegram-bot-secrets
+              key: telegram-api-id
+        - name: TELEGRAM_API_HASH
+          valueFrom:
+            secretKeyRef:
+              name: telegram-bot-secrets
+              key: telegram-api-hash
+        - name: PERPLEXITY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: telegram-bot-secrets
+              key: perplexity-api-key
+        - name: YANDEX_OAUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: telegram-bot-secrets
+              key: yandex-oauth-token
+        - name: YANDEX_FOLDER_ID
+          valueFrom:
+            secretKeyRef:
+              name: telegram-bot-secrets
+              key: yandex-folder-id
+        volumeMounts:
+        - name: bot-data
+          mountPath: /app/downloads
+        - name: bot-config
+          mountPath: /app/.env
+          subPath: .env
+        - name: bot-config
+          mountPath: /app/config.ini
+          subPath: config.ini
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - monitoring/health_check.py
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - monitoring/health_check.py
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: bot-data
+        persistentVolumeClaim:
+          claimName: telegram-bot-pvc
+      - name: bot-config
+        secret:
+          secretName: telegram-bot-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telegram-bot-service
+spec:
+  selector:
+    app: telegram-auto-post-bot
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: telegram-bot-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi 
