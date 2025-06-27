@@ -118,12 +118,10 @@ async def send_message_with_photos_to_channel(text: str, photo_paths: list):
             if not photo_paths:
                 sent_message = await client.send_message(target_channel_id, text)
                 photo_file_ids = []
-        else:
+            else:
                 sent_message = await client.send_file(target_channel_id, photo_paths, caption=text)
                 # Если это альбом, sent_message будет списком. Берем первый для ID.
-                # Все фото из альбома будут сгруппированы под ID первого сообщения.
                 message_to_process = sent_message[0] if isinstance(sent_message, list) else sent_message
-                
                 # Извлекаем file_id для каждой фотографии
                 photo_file_ids = []
                 if isinstance(sent_message, list):
@@ -131,13 +129,13 @@ async def send_message_with_photos_to_channel(text: str, photo_paths: list):
                         if msg.media and hasattr(msg.media, 'photo'):
                             photo_file_ids.append(msg.media.photo.id)
                 elif sent_message.media and hasattr(sent_message.media, 'photo'):
-                     photo_file_ids.append(sent_message.media.photo.id)
-
-            target_message_id = message_to_process.id
-            
+                    photo_file_ids.append(sent_message.media.photo.id)
+                target_message_id = message_to_process.id
+            if not photo_paths:
+                message_to_process = sent_message
+                target_message_id = sent_message.id
             print(f">> Пост успешно отправлен в канал. ID поста: {target_message_id}")
             return target_message_id, photo_file_ids
-
         except Exception as e:
             print(f"❌ Ошибка при отправке сообщения в Telegram: {e}")
             return None, None 

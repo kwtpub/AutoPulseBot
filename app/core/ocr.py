@@ -55,8 +55,8 @@ class OCRProcessor:
                 self.yandex_token = os.getenv('YANDEX_IAM_TOKEN')
                 headers = {"Authorization": f"Bearer {self.yandex_token}"}
                 # Повторяем запрос с новым токеном
-        response = requests.post(url, json=body, headers=headers)
-        response.raise_for_status()
+                response = requests.post(url, json=body, headers=headers)
+                response.raise_for_status()
             else:
                 raise e
         
