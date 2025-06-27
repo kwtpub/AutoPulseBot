@@ -8,98 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.13'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
-    - name: Create deployment package
-      run: |
-        mkdir -p deployment
-        cp -r app/ deployment/
-        cp main.py deployment/
-        cp requirements.txt deployment/
-        cp example.env deployment/
-        cp config.example.ini deployment/
-        cp README.md deployment/
-        
-        # Create deployment script
-        cat > deployment/deploy.sh << 'EOF'
-        #!/bin/bash
-        set -e
-        
-        echo "Starting deployment..."
-        
-        # Create virtual environment if it doesn't exist
-        if [ ! -d "venv" ]; then
-            echo "Creating virtual environment..."
-            python3 -m venv venv
-        fi
-        
-        # Activate virtual environment
-        source venv/bin/activate
-        
-        # Install dependencies
-        echo "Installing dependencies..."
-        pip install -r requirements.txt
-        
-        # Create .env from template if it doesn't exist
-        if [ ! -f ".env" ]; then
-            echo "Creating .env from template..."
-            cp example.env .env
-            echo "Please configure .env file with your settings"
-        fi
-        
-        # Create config.ini from template if it doesn't exist
-        if [ ! -f "config.ini" ]; then
-            echo "Creating config.ini from template..."
-            cp config.example.ini config.ini
-        fi
-        
-        echo "Deployment completed successfully!"
-        echo "To start the bot, run: python main.py"
-        EOF
-        
-        chmod +x deployment/deploy.sh
-        
-        # Create systemd service file
-        cat > deployment/telegram-bot.service << 'EOF'
-        [Unit]
-        Description=Telegram Auto Post Bot
-        After=network.target
-        
-        [Service]
-        Type=simple
-        User=telegram-bot
-        WorkingDirectory=/opt/telegram-bot
-        Environment=PATH=/opt/telegram-bot/venv/bin
-        ExecStart=/opt/telegram-bot/venv/bin/python main.py
-        Restart=always
-        RestartSec=10
-        
-        [Install]
-        WantedBy=multi-user.target
-        EOF
-    
-    - name: Copy deployment package to server
-      uses: appleboy/scp-action@v0.1.4
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        port: ${{ secrets.SERVER_PORT }}
-        source: "deployment/*"
-        target: "/opt/telegram-bot/"
-    
     - name: Deploy to server
       uses: appleboy/ssh-action@v0.1.7
       with:
@@ -108,20 +18,11 @@ jobs:
         key: ${{ secrets.SERVER_SSH_KEY }}
         port: ${{ secrets.SERVER_PORT }}
         script: |
-          # Stop existing service if running
-          sudo systemctl stop telegram-bot || true
-          
-          # Set up environment
-          cd /opt/telegram-bot
-          ./deploy.sh
-          
-          # Set up systemd service
-          sudo cp telegram-bot.service /etc/systemd/system/
+          cd /root/Telegram-Auto-Post-Bot
+          git pull origin main
+          ./deployment/deploy.sh
+          sudo cp deployment/telegram-bot.service /etc/systemd/system/
           sudo systemctl daemon-reload
           sudo systemctl enable telegram-bot
-          
-          # Start the service
-          sudo systemctl start telegram-bot
-          
-          # Check status
+          sudo systemctl restart telegram-bot
           sudo systemctl status telegram-bot --no-pager 
