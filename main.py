@@ -8,7 +8,7 @@ from telegram.ext import (
     filters, ContextTypes, CallbackQueryHandler,
     ConversationHandler
 )
-
+#new comm
 # --- Клиент для прослушивания канала ---
 from telethon import TelegramClient, events
 
