@@ -1,0 +1,15 @@
+[Unit]
+Description=Telegram Auto Post Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/Telegram-Auto-Post-Bot
+Environment=PATH=/root/Telegram-Auto-Post-Bot/venv/bin
+ExecStart=/root/Telegram-Auto-Post-Bot/venv/bin/python main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
