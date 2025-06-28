@@ -20,8 +20,8 @@ jobs:
         script: |
           cd /root/Telegram-Auto-Post-Bot
           git pull origin main
-          ./deployment/deploy.sh
-          sudo cp deployment/telegram-bot.service /etc/systemd/system/
+          ./deploy.sh
+          sudo cp telegram-bot.service /etc/systemd/system/
           sudo systemctl daemon-reload
           sudo systemctl enable telegram-bot
           sudo systemctl restart telegram-bot
