@@ -1,19 +1,26 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float, JSON
+import re
+import asyncio
+import ssl
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, JSON, text
 from datetime import datetime
+from dotenv import load_dotenv
 
-# Используем переменные окружения для конфигурации подключения к PostgreSQL
-DB_USER = os.getenv("POSTGRES_USER", "bot_user")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "bot_password")
-DB_HOST = os.getenv("POSTGRES_HOST", "postgres") # Имя сервиса в docker-compose
-DB_PORT = os.getenv("POSTGRES_PORT", "5432")
-DB_NAME = os.getenv("POSTGRES_DB", "telegram_bot")
+load_dotenv()
 
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = os.getenv("DATABASE_URL")
+ASYNC_DATABASE_URL = re.sub(r'^postgresql:', 'postgresql+asyncpg:', DATABASE_URL)
+# Удаляем только sslmode=require (и &sslmode=require)
+CLEAN_URL = re.sub(r'([&?])sslmode=require&?', r'\1', ASYNC_DATABASE_URL).rstrip('?&')
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_async_engine(
+    CLEAN_URL,
+    echo=True,
+    connect_args={"ssl": ssl.create_default_context()}
+)
+AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 Base = declarative_base()
 
 class Application(Base):
@@ -62,24 +69,22 @@ class Car(Base):
     def __repr__(self):
         return f"<Car(custom_id='{self.custom_id}', brand='{self.brand}', model='{self.model}')>"
 
-def init_db():
+async def init_db():
     """Инициализирует базу данных, создавая все необходимые таблицы."""
     print("Инициализация таблиц базы данных...")
-    Base.metadata.create_all(bind=engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     print("Таблицы успешно созданы или уже существуют.")
 
-def save_application(user_id: int, username: str, text: str):
+async def save_application(user_id: int, username: str, text_: str):
     """Сохраняет новую заявку в базу данных с использованием SQLAlchemy."""
-    db = SessionLocal()
-    try:
+    async with AsyncSessionLocal() as session:
         new_application = Application(
             user_id=user_id,
             username=username,
-            application_text=text,
+            application_text=text_,
             timestamp=datetime.utcnow()
         )
-        db.add(new_application)
-        db.commit()
-        db.refresh(new_application)
-    finally:
-        db.close() 
+        session.add(new_application)
+        await session.commit()
+        await session.refresh(new_application) 

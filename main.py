@@ -13,7 +13,7 @@ from telegram.ext import (
 from telethon import TelegramClient, events
 
 # --- Наши модули ---
-from app.bot.database import init_db, save_application, SessionLocal, Car, Application as ApplicationDB
+from app.bot.database import init_db, save_application, AsyncSessionLocal, Car, Application as ApplicationDB
 from app.utils.channel_parser import convert_telethon_message_to_announcement, fetch_announcements_from_channel
 from app.pipeline import process_single_announcement
 from app.core.perplexity import PerplexityProcessor
@@ -30,8 +30,6 @@ parsed_channels_list = [channel.strip() for channel in raw_channels_str.split(',
 print(f"2. Результат после парсинга: {parsed_channels_list}")
 print("--- КОНЕЦ ДЕБАГА ---\n")
 # --- КОНЕЦ ОТЛАДКИ ---
-
-init_db()
 
 # Telethon
 API_ID = os.getenv("TELEGRAM_API_ID")
@@ -74,7 +72,7 @@ async def new_post_handler(event):
     source_channel_url = f"https://t.me/{source_channel_username}"
     
     print(f"✅ Получен новый пост из {source_channel_url}. Начинаю обработку...")
-    db_session = SessionLocal()
+    db_session = AsyncSessionLocal()
     try:
         announcement = await convert_telethon_message_to_announcement(event.message)
         if announcement:
@@ -88,7 +86,7 @@ async def new_post_handler(event):
     except Exception as e:
         print(f"❌ Ошибка при обработке нового поста {event.message.id} из канала {source_channel_url}: {e}")
     finally:
-        db_session.close()
+        await db_session.close()
 
 # --- Админ-панель ---
 async def get_admin_keyboard():
@@ -131,20 +129,20 @@ async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Логика для статистики
     if query.data == 'admin_stats':
         await query.answer()
-        db_session = SessionLocal()
+        db_session = AsyncSessionLocal()
         try:
-            car_count = db_session.query(Car).count()
-            app_count = db_session.query(ApplicationDB).count()
+            car_count = await db_session.execute(select(Car).count())
+            app_count = await db_session.execute(select(ApplicationDB).count())
             stats_text = (
                 f"📊 **Статистика базы данных**\n\n"
-                f"🚗 Всего автомобилей в каталоге: **{car_count}**\n"
-                f"📝 Всего получено заявок: **{app_count}**"
+                f"🚗 Всего автомобилей в каталоге: **{car_count.scalar()}**\n"
+                f"📝 Всего получено заявок: **{app_count.scalar()}**"
             )
             await query.edit_message_text(text=stats_text, parse_mode='Markdown', reply_markup=await get_admin_keyboard())
         except Exception as e:
             await query.edit_message_text(text=f"❌ Ошибка при получении статистики: {e}", reply_markup=await get_admin_keyboard())
         finally:
-            db_session.close()
+            await db_session.close()
 
     # Логика для установки наценки
     elif query.data == 'admin_set_markup':
@@ -342,7 +340,7 @@ async def handle_parser_count(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def run_parser_task(context, channel, count, message_id, chat_id):
     """Выполняет парсинг канала в фоновом режиме."""
-    db_session = SessionLocal()
+    db_session = AsyncSessionLocal()
     try:
         # Запускаем парсинг
         announcements = await fetch_announcements_from_channel(channel, limit=count)
@@ -397,7 +395,7 @@ async def run_parser_task(context, channel, count, message_id, chat_id):
             reply_markup=await get_admin_keyboard()
         )
     finally:
-        db_session.close()
+        await db_session.close()
 
 # --- Обработчики команд бота (python-telegram-bot) ---
 async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -429,7 +427,7 @@ async def chatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    save_application(user.id, user.username, update.message.text)
+    await save_application(user.id, user.username, update.message.text)
     
     forward_text = f"Новая заявка от @{user.username} (ID: {user.id}):\n\n{update.message.text}"
     await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=forward_text)
@@ -445,49 +443,15 @@ async def post_init(application: Application):
     print("Клиент Telethon для прослушивания канала запущен.")
     print(f"✅ Бот запущен и слушает новые посты в каналах: {', '.join(SOURCE_CHANNELS)}")
 
+# --- Синхронный запуск ---
 def main():
-    """Запускает бота и клиент для прослушивания."""
-    print("Запуск бота...")
-    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
-
-    # Диалог для установки наценки
-    conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_callbacks, pattern='^admin_set_markup$')],
-        states={
-            SET_MARKUP: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_set_markup)],
-        },
-        fallbacks=[CommandHandler('cancel', cancel_conversation)],
-        per_message=False # Важно для работы с одним сообщением
-    )
-
-    # Диалог для парсера каналов
-    parser_conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_callbacks, pattern='^admin_parser$')],
-        states={
-            PARSER_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_channel)],
-            PARSER_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_count)],
-        },
-        fallbacks=[CommandHandler('cancel', cancel_conversation)],
-        per_message=False
-    )
-
-    application.add_handler(conv_handler)
-    application.add_handler(parser_conv_handler)
-
-    # Админ-команды
-    application.add_handler(CommandHandler("admin", admin_panel))
-    # Обработчик для остальных админ-коллбэков (кроме тех, что обрабатываются ConversationHandler)
-    application.add_handler(CallbackQueryHandler(admin_callbacks, pattern='^admin_(stats|source_channels|back_to_main)$'))
-
-    # Пользовательские команды
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("chatid", chatid))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Запускаем все вместе. `run_polling` блокирующий,
-    # а `post_init` запустит Telethon в том же event loop.
+    # Асинхронная инициализация базы данных
+    asyncio.run(init_db())
+    # Здесь создайте и настройте Application, добавьте хендлеры и т.д.
+    # ...
+    # Запуск бота (PTB сам управляет event loop)
     application.run_polling()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
  

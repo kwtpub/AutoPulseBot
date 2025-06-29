@@ -11,7 +11,7 @@ import re
 import sys
 import shutil
 import random
-from app.bot.database import SessionLocal, Car
+from app.bot.database import AsyncSessionLocal, Car
 
 def extract_car_details(text: str):
     """Извлекает детали автомобиля из текста с помощью регулярных выражений."""
@@ -195,30 +195,30 @@ async def process_single_announcement(ann, db_session, perplexity_processor, sou
 async def process_all_cars_from_channel():
     print(">>> Запуск конвейера обработки автомобилей...")
     load_dotenv()
-    db = SessionLocal()
-    try:
-        source_channel = os.getenv("TELEGRAM_CHANNEL")
-        if not source_channel:
-            print("TELEGRAM_CHANNEL не задан в .env")
-            return
+    async with AsyncSessionLocal() as db:
+        try:
+            source_channel = os.getenv("TELEGRAM_CHANNEL")
+            if not source_channel:
+                print("TELEGRAM_CHANNEL не задан в .env")
+                return
 
-        limit, start_from_id = get_telegram_config()
-        markup_percentage = get_pricing_config()
-        print(f">>> Получение объявлений из канала {source_channel}...")
-        announcements = await fetch_announcements_from_channel(source_channel, limit=limit, start_from_id=start_from_id)
-        print(f">>> Получено {len(announcements)} объявлений.")
+            limit, start_from_id = get_telegram_config()
+            markup_percentage = get_pricing_config()
+            print(f">>> Получение объявлений из канала {source_channel}...")
+            announcements = await fetch_announcements_from_channel(source_channel, limit=limit, start_from_id=start_from_id)
+            print(f">>> Получено {len(announcements)} объявлений.")
 
-        api_key = os.getenv("PERPLEXITY_API_KEY")
-        if not api_key:
-            print("PERPLEXITY_API_KEY не найден в .env")
-            return
-        perplexity = PerplexityProcessor(api_key)
+            api_key = os.getenv("PERPLEXITY_API_KEY")
+            if not api_key:
+                print("PERPLEXITY_API_KEY не найден в .env")
+                return
+            perplexity = PerplexityProcessor(api_key)
 
-        for ann in announcements:
-            await process_single_announcement(ann, db, perplexity, source_channel, markup_percentage)
-    finally:
-        db.close()
-        print(">>> Конвейер завершил работу.")
+            for ann in announcements:
+                await process_single_announcement(ann, db, perplexity, source_channel, markup_percentage)
+        finally:
+            await db.close()
+            print(">>> Конвейер завершил работу.")
 
 if __name__ == "__main__":
     asyncio.run(process_all_cars_from_channel()) 
