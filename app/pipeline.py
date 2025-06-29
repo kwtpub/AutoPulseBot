@@ -94,6 +94,12 @@ async def process_single_announcement(ann, db_session, perplexity_processor, sou
                 shutil.rmtree(photo_dir)
         return
 
+    # Добавляем ID в начало поста
+    msg = f"ID: {custom_id}\n" + msg
+
+    # Добавляем контактную информацию в конец поста
+    msg = msg.strip() + "\n\nКонтакт: @VroomMarketManager"
+
     car_details = extract_car_details(msg)
     new_car = Car(
         custom_id=custom_id,
