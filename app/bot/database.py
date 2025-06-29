@@ -3,11 +3,16 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, F
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 
-# Определяем путь к базе данных в корне проекта
-db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'applications.db')
-DATABASE_URL = f"sqlite:///{db_path}"
+# Используем переменные окружения для конфигурации подключения к PostgreSQL
+DB_USER = os.getenv("POSTGRES_USER", "bot_user")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "bot_password")
+DB_HOST = os.getenv("POSTGRES_HOST", "postgres") # Имя сервиса в docker-compose
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+DB_NAME = os.getenv("POSTGRES_DB", "telegram_bot")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -46,8 +51,8 @@ class Car(Base):
     price = Column(Float, index=True)
     description = Column(Text)
     
-    # Храним постоянные file_id фотографий из Telegram
-    photos = Column(JSON) 
+    # Храним URL фотографий из Cloudinary
+    photos = Column(JSON)  # Будет список URL-адресов
     
     status = Column(String, default='available', index=True)
     

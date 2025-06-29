@@ -11,12 +11,14 @@ services:
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
       - ./config.ini:/app/config.ini:ro
-    environment:
-      - PYTHONPATH=/app
+    # environment:
+    #   - PYTHONPATH=/app
     env_file:
       - .env
     networks:
       - bot-network
+    depends_on:
+      - postgres
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
       interval: 30s
@@ -53,8 +55,8 @@ services:
       - "5432:5432"
     networks:
       - bot-network
-    profiles:
-      - production
+    # profiles:
+    #   - production # Убрали профиль, чтобы postgres запускался по умолчанию
 
 networks:
   bot-network:

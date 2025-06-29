@@ -115,24 +115,82 @@ async def process_single_announcement(ann, db_session, perplexity_processor, sou
     db_session.add(new_car)
     db_session.commit()
     db_session.refresh(new_car)
-    print(f">> Автомобиль предварительно сохранен в базу с ID {new_car.id}.")
+    print(f">> Автомобиль предварительно сохранен в базу с ID {new_car.id} (без фото).")
 
-    target_msg_id, photo_ids = await send_message_with_photos_to_channel(msg, ann["photos"])
+    # Загрузка фото в Cloudinary и обновление записи в БД
+    uploaded_photo_urls = []
+    if ann.get("photos"):
+        from app.core.cloudinary_uploader import upload_image_to_cloudinary # Импорт здесь, чтобы избежать циклической зависимости на старте
+
+        # Генерируем уникальный префикс для public_id на основе custom_id автомобиля
+        # чтобы фото одного объявления были сгруппированы в Cloudinary
+        cloudinary_public_id_prefix = f"car_{custom_id}"
+
+        for i, photo_path in enumerate(ann["photos"]):
+            # Создаем уникальный public_id для каждого фото
+            # Пример: car_12345678_photo_0, car_12345678_photo_1
+            photo_public_id = f"{cloudinary_public_id_prefix}_photo_{i}"
+
+            upload_result = upload_image_to_cloudinary(photo_path, public_id=photo_public_id)
+            if upload_result and upload_result.get("secure_url"):
+                uploaded_photo_urls.append(upload_result.get("secure_url"))
+            else:
+                print(f"Не удалось загрузить фото {photo_path} в Cloudinary.")
+
+        if uploaded_photo_urls:
+            new_car.photos = uploaded_photo_urls # Сохраняем список URL-ов
+            db_session.commit()
+            print(f">> URL фото из Cloudinary ({len(uploaded_photo_urls)} шт.) сохранены в БД.")
+        else:
+            print(">> Не удалось загрузить ни одного фото в Cloudinary для этого объявления.")
+            # Решаем, что делать дальше: удалить запись, оставить без фото, или пометить как ошибку
+            # Пока оставим без фото, но можно добавить другую логику
+
+    # Отправка сообщения в Telegram канал
+    # Если фото были загружены в Cloudinary, используем их URL для отображения (если это поддерживается функцией отправки)
+    # или отправляем только текст, если фото не критичны для отображения в Telegram напрямую.
+    # В данном случае, send_message_with_photos_to_channel ожидает локальные пути.
+    # Мы можем либо изменить эту функцию, чтобы она принимала URL, либо отправлять фото как раньше,
+    # а Cloudinary использовать как основное хранилище.
+    # Пока оставим отправку локальных фото, если они есть.
+
+    # Важно: photo_ids, возвращаемые send_message_with_photos_to_channel, это Telegram file_id.
+    # Мы их больше не сохраняем в new_car.photos, так как там теперь URL Cloudinary.
+    # Если они нужны для чего-то еще (например, для редактирования сообщения с фото),
+    # то нужно решить, как их обрабатывать. Пока они не используются после сохранения.
+
+    target_msg_id, _ = await send_message_with_photos_to_channel(msg, ann["photos"]) # photo_ids больше не присваиваем
+
     if target_msg_id:
         new_car.target_channel_message_id = target_msg_id
-        new_car.photos = photo_ids
-        new_car.status = 'available'
+        new_car.status = 'available' # Статус 'available' даже если фото не загрузились в Cloudinary, но пост опубликован
         db_session.commit()
-        print(f">> Пост опубликован. Запись в БД обновлена.")
+        print(f">> Пост опубликован в Telegram. Запись в БД обновлена (статус, ID сообщения).")
     else:
-        print(">> Публикация не удалась. Откат записи в БД.")
-        db_session.delete(new_car)
+        print(">> Публикация в Telegram не удалась. Откат основных данных автомобиля.")
+        # Здесь важно решить, нужно ли удалять уже загруженные в Cloudinary фото, если публикация в Telegram не удалась.
+        # Это зависит от требований. Пока мы их не удаляем.
+        db_session.delete(new_car) # Удаляем запись о машине, если она не опубликована в Telegram
         db_session.commit()
     
-    if ann.get("photos"):
-        photo_dir = os.path.dirname(ann["photos"][0])
-        if os.path.exists(photo_dir):
-            shutil.rmtree(photo_dir)
+    # Удаление временных локальных файлов фотографий после обработки
+    if ann.get("temp_dir") and os.path.exists(ann["temp_dir"]):
+        shutil.rmtree(ann["temp_dir"])
+        print(f">> Временная папка {ann['temp_dir']} удалена.")
+    elif ann.get("photos"): # Если temp_dir не был предоставлен, но фото есть
+        # Пытаемся удалить родительскую папку первого фото, если она существует и не является корневой download_dir
+        # Это более хрупкая логика, лучше передавать temp_dir из fetch_announcements_from_channel
+        try:
+            photo_dir = os.path.dirname(ann["photos"][0])
+            # Проверяем, что это не сама папка 'downloads', чтобы случайно не удалить все
+            if os.path.exists(photo_dir) and photo_dir != "downloads" and photo_dir != os.path.abspath("downloads"):
+                 # Дополнительная проверка, чтобы не удалить что-то важное, если структура неожиданная
+                if "temp" in photo_dir or str(message_id) in photo_dir : # Убедимся, что это похоже на временную папку
+                    shutil.rmtree(photo_dir)
+                    print(f">> Временная папка с фото {photo_dir} удалена (определена по пути к фото).")
+        except Exception as e:
+            print(f"Ошибка при попытке удаления временной папки с фото: {e}")
+
 
 async def process_all_cars_from_channel():
     print(">>> Запуск конвейера обработки автомобилей...")
