@@ -1,13 +1,16 @@
 """
 Команда /getauto для получения информации об автомобиле по custom_id
 """
+import asyncio
 import aiohttp
+import logging
 import os
 from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-# Настройки Node.js API
+# Настройки
+logger = logging.getLogger(__name__)
 NODE_API_URL = f"http://localhost:{os.getenv('NODE_PORT', 3001)}/api"
 
 async def get_car_from_api(custom_id: str):
@@ -138,38 +141,57 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if photos and len(photos) > 0:
             # Скачиваем фотографии
             photo_files = []
-            for photo_url in photos[:10]:  # Максимум 10 фото
+            for i, photo_url in enumerate(photos[:10]):  # Максимум 10 фото
                 photo_data = await download_image(photo_url)
                 if photo_data:
                     photo_files.append(photo_data)
+                # Небольшая задержка между скачиваниями
+                if i < len(photos) - 1 and len(photos) > 1:
+                    await asyncio.sleep(0.3)
             
             if photo_files:
-                if len(photo_files) == 1:
-                    # Одно фото - отправляем с подписью
-                    await update.message.reply_photo(
-                        photo=photo_files[0],
-                        caption=message,
-                        parse_mode='Markdown'
-                    )
-                else:
-                    # Много фото - отправляем медиа-группу, потом текст
-                    from telegram import InputMediaPhoto as TelegramInputMediaPhoto
-                    
-                    media_group = []
-                    for photo_file in photo_files:
-                        media_group.append(TelegramInputMediaPhoto(photo_file))
-                    
-                    # Отправляем фотографии
-                    await context.bot.send_media_group(
-                        chat_id=update.effective_chat.id,
-                        media=media_group
-                    )
-                    
-                    # Отправляем описание отдельно
-                    await update.message.reply_text(
-                        message,
-                        parse_mode='Markdown'
-                    )
+                try:
+                    if len(photo_files) == 1:
+                        # Одно фото - отправляем с подписью
+                        await update.message.reply_photo(
+                            photo=photo_files[0],
+                            caption=message,
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        # Много фото - отправляем медиа-группу с подписью к первому фото
+                        from telegram import InputMediaPhoto as TelegramInputMediaPhoto
+                        
+                        media_group = []
+                        for i, photo_file in enumerate(photo_files):
+                            if i == 0:
+                                # К первому фото добавляем подпись
+                                media_group.append(TelegramInputMediaPhoto(photo_file, caption=message, parse_mode='Markdown'))
+                            else:
+                                media_group.append(TelegramInputMediaPhoto(photo_file))
+                        
+                        # Отправляем фотографии с подписью
+                        await context.bot.send_media_group(
+                            chat_id=update.effective_chat.id,
+                            media=media_group
+                        )
+                except Exception as e:
+                    if "flood" in str(e).lower() or "too many requests" in str(e).lower():
+                        logger.warning(f"Telegram флуд-лимит при отправке фото: {e}")
+                        try:
+                            # Пробуем отправить только первое фото
+                            await update.message.reply_photo(
+                                photo=photo_files[0],
+                                caption=f"{message}\n\n⚠️ Остальные фото временно недоступны из-за ограничений Telegram",
+                                parse_mode='Markdown'
+                            )
+                        except:
+                            await update.message.reply_text(
+                                f"⚠️ Фотографии временно недоступны из-за ограничений Telegram\n\n{message}",
+                                parse_mode='Markdown'
+                            )
+                    else:
+                        raise e
             else:
                 # Если фото не удалось скачать, отправляем только текст
                 await update.message.reply_text(
@@ -187,7 +209,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         contact_message = (
             f"💬 **Заинтересовало это авто?**\n\n"
             f"Свяжитесь с нашим менеджером для получения дополнительной информации "
-            f"и организации просмотра автомобиля."
+            f"и заказа автомобиля."
         )
         
         # Создаем URL с pre-filled сообщением

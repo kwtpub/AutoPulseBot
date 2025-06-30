@@ -10,7 +10,6 @@ import aiohttp
 from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.types import InputMediaPhoto
 from io import BytesIO
 
 load_dotenv()
@@ -147,25 +146,39 @@ async def send_car_to_user(custom_id: str, user_id: int):
                 photo_data = await download_image(photo_url)
                 if photo_data:
                     photo_files.append(photo_data)
+                # Небольшая задержка между скачиваниями
+                if i < len(photos) and len(photos) > 1:
+                    await asyncio.sleep(0.5)
             
             if photo_files:
                 print(f"📤 Отправка сообщения с {len(photo_files)} фотографиями...")
                 
-                # Отправляем медиа-группу с фотографиями
-                media = []
-                for i, photo_file in enumerate(photo_files):
-                    media.append(InputMediaPhoto(photo_file))
-                
-                # Отправляем фотографии
-                await client.send_file(
-                    user_id, 
-                    media, 
-                    caption=message if len(media) == 1 else None
-                )
-                
-                # Если много фото, отправляем текст отдельно
-                if len(media) > 1:
-                    await client.send_message(user_id, message)
+                # Отправляем фотографии с подписью
+                try:
+                    await client.send_file(
+                        user_id, 
+                        photo_files, 
+                        caption=message
+                    )
+                except Exception as e:
+                    if "wait" in str(e).lower() and "seconds" in str(e).lower():
+                        print(f"⚠️  Telegram флуд-лимит: {e}")
+                        print("📤 Пробуем отправить только первое фото...")
+                        try:
+                            # Пробуем отправить только первое фото
+                            await client.send_file(
+                                user_id, 
+                                photo_files[0], 
+                                caption=f"{message}\n\n⚠️ Остальные фото временно недоступны из-за ограничений Telegram"
+                            )
+                        except:
+                            print("📤 Отправляем только текст без фотографий...")
+                            await client.send_message(
+                                user_id,
+                                f"⚠️ Фотографии временно недоступны из-за ограничений Telegram\n\n{message}"
+                            )
+                    else:
+                        raise e
             else:
                 # Если фото не удалось скачать, отправляем только текст
                 print("⚠️  Не удалось скачать фотографии, отправляем только текст")
