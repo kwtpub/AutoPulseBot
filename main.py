@@ -20,6 +20,7 @@ from app.utils.config import get_pricing_config, set_pricing_config
 from app.commands.start import register_handlers as register_start_handlers, leave_request_entry_callback, handle_leave_request, LEAVE_REQUEST
 from app.commands.chatid import chatid
 from app.commands.admin import register_admin_handlers
+from app.commands.getauto import getauto_command
 
 # --- Конфигурация ---
 load_dotenv()
@@ -92,6 +93,7 @@ async def post_init(application: Application):
         BotCommand("start", "Запуск бота"),
         BotCommand("admin", "Админ-панель"),
         BotCommand("chatid", "Узнать ID чата"),
+        BotCommand("getauto", "Получить информацию об автомобиле"),
         BotCommand("help", "Помощь"),
     ])
     if not SOURCE_CHANNELS:
@@ -126,6 +128,9 @@ def main():
     
     # /chatid команда
     application.add_handler(CommandHandler("chatid", chatid))
+    
+    # /getauto команда
+    application.add_handler(CommandHandler("getauto", getauto_command))
 
     # Запуск бота
     application.run_polling()

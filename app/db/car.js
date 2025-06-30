@@ -121,9 +121,25 @@ async function getCar(custom_id) {
     }
     
     const car = result.rows[0];
-    // Парсим JSON поле photos
+    
+    // Безопасно парсим JSON поле photos
     if (car.photos) {
-      car.photos = JSON.parse(car.photos);
+      try {
+        // Если photos уже объект (JSONB), используем как есть
+        if (typeof car.photos === 'object') {
+          // Уже распарсено PostgreSQL
+        } else if (typeof car.photos === 'string') {
+          // Если строка, пытаемся парсить
+          car.photos = JSON.parse(car.photos);
+        }
+      } catch (parseError) {
+        console.error('Ошибка парсинга photos для автомобиля', custom_id, ':', parseError.message);
+        console.error('Содержимое photos:', car.photos);
+        // Если не удалось парсить, устанавливаем пустой массив
+        car.photos = [];
+      }
+    } else {
+      car.photos = [];
     }
     
     return car;
@@ -152,9 +168,23 @@ async function getAllCars(limit = 10, offset = 0) {
     const countResult = await client.query(countQuery);
     
     const cars = carsResult.rows.map(car => {
-      // Парсим JSON поле photos
+      // Безопасно парсим JSON поле photos
       if (car.photos) {
-        car.photos = JSON.parse(car.photos);
+        try {
+          // Если photos уже объект (JSONB), используем как есть
+          if (typeof car.photos === 'object') {
+            // Уже распарсено PostgreSQL
+          } else if (typeof car.photos === 'string') {
+            // Если строка, пытаемся парсить
+            car.photos = JSON.parse(car.photos);
+          }
+        } catch (parseError) {
+          console.error('Ошибка парсинга photos для автомобиля', car.custom_id, ':', parseError.message);
+          // Если не удалось парсить, устанавливаем пустой массив
+          car.photos = [];
+        }
+      } else {
+        car.photos = [];
       }
       return car;
     });
