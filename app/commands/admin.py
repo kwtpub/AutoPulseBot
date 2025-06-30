@@ -2,6 +2,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from app.utils.config import set_pricing_config
+from app.utils.announcement_processor import process_single_announcement
 from app.utils.channel_parser import fetch_announcements_from_channel
 import asyncio
 
@@ -83,9 +84,51 @@ async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif query.data == 'admin_parser':
         await query.answer()
+        
+        # Создаем клавиатуру с каналами для выбора
+        keyboard = []
+        if SOURCE_CHANNELS:
+            for channel in SOURCE_CHANNELS:
+                # Убираем @ если есть и добавляем кнопку
+                display_name = channel.lstrip('@')
+                keyboard.append([InlineKeyboardButton(f"📡 {display_name}", callback_data=f'parser_select_{channel}')])
+        
+        # Добавляем кнопку для ввода вручную
+        keyboard.append([InlineKeyboardButton("✏️ Ввести канал вручную", callback_data='parser_manual')])
+        keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='admin_back_to_main')])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        channels_text = ""
+        if SOURCE_CHANNELS:
+            channels_text = "\n\n**Доступные каналы:**\n" + "\n".join([f"• `{ch}`" for ch in SOURCE_CHANNELS])
+        
+        await query.edit_message_text(
+            text=f"🔍 **Парсер каналов**\n\nВыберите канал из списка или введите вручную:{channels_text}",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return ConversationHandler.END
+        
+    elif query.data.startswith('parser_select_'):
+        await query.answer()
+        # Извлекаем выбранный канал
+        selected_channel = query.data.replace('parser_select_', '')
+        context.user_data['parser_channel'] = selected_channel
+        
+        await query.edit_message_text(
+            text=f"🔍 **Парсер каналов**\n\nВыбранный канал: `{selected_channel}`\n\nВведите количество последних сообщений для парсинга (например: 100):",
+            parse_mode='Markdown',
+            reply_markup=await get_back_keyboard()
+        )
+        return PARSER_COUNT
+        
+    elif query.data == 'parser_manual':
+        await query.answer()
         await query.edit_message_text(
             text="🔍 **Парсер каналов**\n\nВведите канал для парсинга (например: @milkos44556):",
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=await get_back_keyboard()
         )
         return PARSER_CHANNEL
         
@@ -207,10 +250,14 @@ async def handle_parser_count(update: Update, context: ContextTypes.DEFAULT_TYPE
     return ConversationHandler.END
 
 async def run_parser_task(context, channel, count, message_id, chat_id):
+    """Запускает парсинг канала используя единый процессор из pipeline.py"""
     perplexity_processor = context.application.bot_data['perplexity_processor']
     MARKUP_PERCENTAGE = context.application.bot_data['MARKUP_PERCENTAGE']
+    
     try:
+        # Получаем объявления из канала
         announcements = await fetch_announcements_from_channel(channel, limit=count)
+        
         if not announcements:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
@@ -220,10 +267,15 @@ async def run_parser_task(context, channel, count, message_id, chat_id):
                 reply_markup=await get_admin_keyboard()
             )
             return
+        
+        # Обрабатываем каждое объявление через единый процессор
         processed_count = 0
-        for announcement in announcements:
+        error_count = 0
+        
+        for i, announcement in enumerate(announcements, 1):
+            print(f"\n--- Админ-парсинг: Обработка {i}/{len(announcements)} ---")
             try:
-                await context.application.bot_data['process_single_announcement'](
+                await process_single_announcement(
                     ann=announcement,
                     perplexity_processor=perplexity_processor,
                     source_channel=channel,
@@ -231,19 +283,37 @@ async def run_parser_task(context, channel, count, message_id, chat_id):
                 )
                 processed_count += 1
             except Exception as e:
-                print(f"Ошибка обработки объявления: {e}")
+                error_count += 1
+                print(f"❌ Ошибка обработки объявления {announcement.get('id', 'unknown')}: {e}")
+            
+            # Небольшая пауза между обработкой
+            await asyncio.sleep(0.5)
+        
+        # Формируем сообщение с результатами
+        status_icon = "✅" if error_count == 0 else "⚠️"
+        result_text = f"{status_icon} **Парсинг завершен!**\n\n"
+        result_text += f"Канал: `{channel}`\n"
+        result_text += f"Найдено объявлений: {len(announcements)}\n"
+        result_text += f"Обработано успешно: {processed_count}\n"
+        
+        if error_count > 0:
+            result_text += f"Ошибок: {error_count}\n"
+        
+        result_text += f"\n🚗 Объявления добавлены в каталог."
+        
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message_id,
-            text=f"✅ **Парсинг завершен!**\n\nКанал: `{channel}`\nНайдено объявлений: {len(announcements)}\nОбработано успешно: {processed_count}\n\n🚗 Объявления добавлены в каталог.",
+            text=result_text,
             parse_mode='Markdown',
             reply_markup=await get_admin_keyboard()
         )
+        
     except Exception as e:
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message_id,
-            text=f"❌ **Ошибка парсинга:**\n\n{str(e)}",
+            text=f"❌ **Критическая ошибка парсинга:**\n\n{str(e)}",
             parse_mode='Markdown',
             reply_markup=await get_admin_keyboard()
         )
@@ -264,12 +334,25 @@ def register_admin_handlers(application):
     admin_conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
-            CallbackQueryHandler(admin_callbacks, pattern="^admin_")
+            CallbackQueryHandler(admin_callbacks, pattern="^admin_"),
+            CallbackQueryHandler(admin_callbacks, pattern="^parser_")
         ],
         states={
-            SET_MARKUP: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_set_markup)],
-            PARSER_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_channel)],
-            PARSER_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_count)],
+            SET_MARKUP: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_set_markup),
+                CallbackQueryHandler(admin_callbacks, pattern="^admin_"),
+                CallbackQueryHandler(admin_callbacks, pattern="^parser_")
+            ],
+            PARSER_CHANNEL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_channel),
+                CallbackQueryHandler(admin_callbacks, pattern="^admin_"),
+                CallbackQueryHandler(admin_callbacks, pattern="^parser_")
+            ],
+            PARSER_COUNT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_count),
+                CallbackQueryHandler(admin_callbacks, pattern="^admin_"),
+                CallbackQueryHandler(admin_callbacks, pattern="^parser_")
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel_conversation)],
         allow_reentry=True,

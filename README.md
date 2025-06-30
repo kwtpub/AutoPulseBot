@@ -53,7 +53,14 @@
     *   Скопируйте `example.env` в `.env` и `config.example.ini` в `config.ini`.
     *   Заполните все необходимые переменные в обоих файлах (`.env` и `config.ini`).
 
-4.  **Запуск:**
+4.  **Генерация строковой сессии Telegram:**
+    ```bash
+    python generate_session.py
+    ```
+    *   Скопируйте полученную `TELEGRAM_SESSION_STRING` в ваш `.env` файл.
+    *   После этого можете удалить файлы `*.session`.
+
+5.  **Запуск:**
         ```bash
     make run
     # или

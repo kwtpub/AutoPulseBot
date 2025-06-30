@@ -1,8 +1,160 @@
 import os
+import asyncio
+from datetime import datetime
 from dotenv import load_dotenv
 from telethon import TelegramClient
-from telethon.tl.types import MessageService
+from telethon.sessions import StringSession
+from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument, MessageService
+import logging
 import shutil
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+load_dotenv()
+
+api_id = int(os.getenv("TELEGRAM_API_ID"))
+api_hash = os.getenv("TELEGRAM_API_HASH")
+session_string = os.getenv("TELEGRAM_SESSION_STRING", "")
+
+if not session_string:
+    raise ValueError(
+        "TELEGRAM_SESSION_STRING not found in environment variables. "
+        "Please run 'python generate_session.py' to generate it."
+    )
+
+# Создаем клиент с StringSession
+client = TelegramClient(StringSession(session_string), api_id, api_hash)
+
+async def get_channel_messages(channel_username, limit=10, start_from_id=None):
+    """
+    Получить сообщения из канала с фотографиями
+    
+    Args:
+        channel_username: Username канала (например, @channel_name или ссылка)
+        limit: Количество сообщений для получения
+        start_from_id: ID сообщения, с которого начинать (если None, то с самых новых)
+    
+    Returns:
+        Список словарей с информацией о сообщениях:
+        [
+            {
+                'id': int,
+                'text': str,
+                'date': datetime,
+                'photos': [str], # пути к скачанным фото
+                'has_media': bool
+            },
+            ...
+        ]
+    """
+    try:
+        await client.start()
+        logger.info(f"Подключение к каналу: {channel_username}")
+        
+        # Получаем сущность канала
+        entity = await client.get_entity(channel_username)
+        logger.info(f"Найден канал: {entity.title}")
+        
+        messages = []
+        message_count = 0
+        
+        # Итерируемся по сообщениям
+        async for message in client.iter_messages(
+            entity, 
+            limit=limit,
+            min_id=start_from_id if start_from_id else 0
+        ):
+            message_count += 1
+            
+            # Пропускаем служебные сообщения
+            if not message.text and not message.media:
+                continue
+                
+            message_data = {
+                'id': message.id,
+                'text': message.text or '',
+                'date': message.date,
+                'photos': [],
+                'has_media': bool(message.media)
+            }
+            
+            # Обрабатываем медиа
+            if message.media:
+                if isinstance(message.media, MessageMediaPhoto):
+                    # Скачиваем фото
+                    try:
+                        photo_path = await client.download_media(
+                            message.media, 
+                            file=f"downloads/photo_{message.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+                        )
+                        if photo_path:
+                            message_data['photos'].append(photo_path)
+                            logger.info(f"Фото скачано: {photo_path}")
+                    except Exception as e:
+                        logger.error(f"Ошибка скачивания фото из сообщения {message.id}: {e}")
+                        
+                elif isinstance(message.media, MessageMediaDocument):
+                    # Проверяем, является ли документ изображением
+                    if message.media.document.mime_type and message.media.document.mime_type.startswith('image/'):
+                        try:
+                            photo_path = await client.download_media(
+                                message.media, 
+                                file=f"downloads/image_{message.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            )
+                            if photo_path:
+                                message_data['photos'].append(photo_path)
+                                logger.info(f"Изображение скачано: {photo_path}")
+                        except Exception as e:
+                            logger.error(f"Ошибка скачивания изображения из сообщения {message.id}: {e}")
+            
+            messages.append(message_data)
+            logger.info(f"Обработано сообщение {message.id}: текст={len(message_data['text'])} символов, фото={len(message_data['photos'])}")
+        
+        logger.info(f"Получено {len(messages)} сообщений из {message_count} проверенных")
+        return messages
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения сообщений из {channel_username}: {e}")
+        return []
+    finally:
+        await client.disconnect()
+
+async def parse_channel(channel_username, message_count=10):
+    """
+    Парсинг канала - получение сообщений с медиа
+    
+    Args:
+        channel_username: Имя канала или ссылка
+        message_count: Количество сообщений для получения
+    
+    Returns:
+        Список сообщений с медиа
+    """
+    logger.info(f"Начинаем парсинг канала {channel_username}, сообщений: {message_count}")
+    
+    # Убеждаемся что папка downloads существует
+    os.makedirs('downloads', exist_ok=True)
+    
+    messages = await get_channel_messages(channel_username, limit=message_count)
+    
+    # Фильтруем сообщения с медиа
+    media_messages = [msg for msg in messages if msg['has_media'] and msg['photos']]
+    
+    logger.info(f"Найдено {len(media_messages)} сообщений с фотографиями из {len(messages)} общих")
+    
+    return media_messages
+
+if __name__ == "__main__":
+    # Пример использования
+    async def main():
+        channel = "@your_channel"
+        messages = await parse_channel(channel, 5)
+        for msg in messages:
+            print(f"Сообщение {msg['id']}: {msg['text'][:50]}... фото: {len(msg['photos'])}")
+    
+    asyncio.run(main())
 
 def is_photo_message(msg):
     if msg.photo:
@@ -18,13 +170,8 @@ async def fetch_announcements_from_channel(source_channel, limit=10, download_di
     Сначала загружает буфер сообщений, затем обрабатывает их от старых к новым, чтобы правильно сгруппировать фото и текст.
     Возвращает `limit` самых последних объявлений.
     """
-    load_dotenv()
-    api_id = int(os.getenv("TELEGRAM_API_ID"))
-    api_hash = os.getenv("TELEGRAM_API_HASH")
-    phone = os.getenv("TELEGRAM_PHONE")
-
-    client = TelegramClient('session', api_id, api_hash)
-    await client.start(phone=phone)
+    # Используем уже созданный клиент с StringSession из модуля
+    await client.start()
     if not os.path.exists(download_dir):
         os.makedirs(download_dir)
     if not os.path.exists(temp_dir):

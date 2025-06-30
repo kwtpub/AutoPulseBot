@@ -1,6 +1,6 @@
 import requests
 
-def send_car_to_node(car_data, url="http://localhost:3001/add-car"):
+def send_car_to_node(car_data, url="http://localhost:3001/api/cars"):
     """
     Отправляет данные о машине на Node.js сервер через HTTP POST.
     :param car_data: dict с данными автомобиля

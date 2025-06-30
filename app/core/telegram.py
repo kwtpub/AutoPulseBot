@@ -1,14 +1,139 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from telethon.tl.types import InputMediaPhoto
 from telethon.tl.custom import Button
 
+load_dotenv()
+
+api_id = int(os.getenv("TELEGRAM_API_ID"))
+api_hash = os.getenv("TELEGRAM_API_HASH")
+session_string = os.getenv("TELEGRAM_SESSION_STRING", "")
+
+if not session_string:
+    raise ValueError(
+        "TELEGRAM_SESSION_STRING not found in environment variables. "
+        "Please run 'python generate_session.py' to generate it."
+    )
+
+async def get_client():
+    """Получить подключенный Telethon клиент"""
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
+    if not client.is_connected():
+        await client.connect()
+    return client
+
+async def get_channel_id(channel_username):
+    """Получить ID канала по его username"""
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
+    try:
+        await client.start()
+        entity = await client.get_entity(channel_username)
+        return entity.id
+    except Exception as e:
+        print(f"Ошибка получения ID канала {channel_username}: {e}")
+        return None
+    finally:
+        await client.disconnect()
+
+async def send_to_channel(channel_id, message, photo_path=None):
+    """
+    Отправить сообщение в канал
+    
+    Args:
+        channel_id: ID канала (число)
+        message: Текст сообщения
+        photo_path: Путь к фото (опционально)
+    
+    Returns:
+        Отправленное сообщение или None при ошибке
+    """
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
+    try:
+        await client.start()
+        
+        if photo_path and os.path.exists(photo_path):
+            # Отправляем с фото
+            sent_message = await client.send_file(
+                channel_id,
+                photo_path,
+                caption=message,
+                parse_mode='html'
+            )
+        else:
+            # Отправляем только текст
+            sent_message = await client.send_message(
+                channel_id,
+                message,
+                parse_mode='html'
+            )
+        
+        print(f"Сообщение отправлено в канал {channel_id}")
+        return sent_message
+        
+    except Exception as e:
+        print(f"Ошибка отправки в канал {channel_id}: {e}")
+        return None
+    finally:
+        await client.disconnect()
+
+async def get_messages_from_channel(channel_username, limit=10, start_from_id=None):
+    """
+    Получить сообщения из канала
+    
+    Args:
+        channel_username: Username канала (например, @channel_name)
+        limit: Количество сообщений для получения
+        start_from_id: ID сообщения, с которого начинать
+    
+    Returns:
+        Список сообщений
+    """
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
+    try:
+        await client.start()
+        
+        # Получаем сущность канала
+        entity = await client.get_entity(channel_username)
+        
+        # Получаем сообщения
+        messages = []
+        async for message in client.iter_messages(
+            entity, 
+            limit=limit,
+            min_id=start_from_id if start_from_id else 0
+        ):
+            messages.append(message)
+        
+        return messages
+        
+    except Exception as e:
+        print(f"Ошибка получения сообщений из {channel_username}: {e}")
+        return []
+    finally:
+        await client.disconnect()
+
+# Для обратной совместимости - создаем глобальный клиент
+async def get_legacy_client():
+    """Создать клиент для использования с async with"""
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
+    return client
+
+# Функция для получения определенного сообщения
+async def get_message_by_id(channel_username, message_id):
+    """Получить конкретное сообщение по ID"""
+    async with TelegramClient(StringSession(session_string), api_id, api_hash) as client:
+        try:
+            entity = await client.get_entity(channel_username)
+            message = await client.get_messages(entity, ids=message_id)
+            return message
+        except Exception as e:
+            print(f"Ошибка получения сообщения {message_id} из {channel_username}: {e}")
+            return None
+
 async def send_message_to_channel(message: str, button_text: str = None, button_url: str = None):
-    load_dotenv()
-    api_id = int(os.getenv("TELEGRAM_API_ID"))
-    api_hash = os.getenv("TELEGRAM_API_HASH")
-    phone = os.getenv("TELEGRAM_PHONE")
     channel_id = os.getenv("TELEGRAM_CHANNEL_ID")
     
     # Поддержка как числовых ID, так и username каналов
@@ -24,8 +149,8 @@ async def send_message_to_channel(message: str, button_text: str = None, button_
             [Button.url(button_text, button_url)]
         ]
 
-    client = TelegramClient('session', api_id, api_hash)
-    await client.start(phone=phone)
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
+    await client.start()
     await client.send_message(channel_id, message, buttons=buttons)
     await client.disconnect()
 
@@ -43,13 +168,8 @@ async def fetch_text_photo_pairs(source_channel, limit=500, download_dir="downlo
     Пары ищутся по принципу: ближайший текст и ближайшее фото (включая документы-изображения), даже если между ними есть другие сообщения.
     Фото скачиваются с уникальным именем по id сообщения с фото.
     """
-    load_dotenv()
-    api_id = int(os.getenv("TELEGRAM_API_ID"))
-    api_hash = os.getenv("TELEGRAM_API_HASH")
-    phone = os.getenv("TELEGRAM_PHONE")
-
-    client = TelegramClient('session', api_id, api_hash)
-    await client.start(phone=phone)
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
+    await client.start()
     if not os.path.exists(download_dir):
         os.makedirs(download_dir)
     # 1. Собираем все сообщения в список
@@ -94,10 +214,6 @@ async def send_message_with_photos_to_channel(text: str, photo_paths: list):
     Отправляет пост с фотографиями и текстом в целевой канал.
     Возвращает ID созданного поста и список file_id фотографий.
     """
-    load_dotenv()
-    api_id = os.getenv("TELEGRAM_API_ID")
-    api_hash = os.getenv("TELEGRAM_API_HASH")
-    session_name = "telegram_session"
     target_channel = os.getenv("TARGET_CHANNEL_ID")
     
     # Поддержка как числовых ID, так и username каналов
@@ -112,7 +228,7 @@ async def send_message_with_photos_to_channel(text: str, photo_paths: list):
     if len(text) > max_caption_length:
         text = text[:max_caption_length-3] + "..."
 
-    async with TelegramClient(session_name, api_id, api_hash) as client:
+    async with TelegramClient(StringSession(session_string), api_id, api_hash) as client:
         try:
             # Отправляем пост
             if not photo_paths:
