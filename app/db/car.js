@@ -1,34 +1,26 @@
-const { Client } = require('pg');
-require('dotenv').config();
+const { Pool } = require('pg');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 
 const connectionString = process.env.DATABASE_URL
   .replace(/([&?])(sslmode|channel_binding)=require&?/g, '$1')
   .replace(/[?&]$/, '');
 
-const client = new Client({
+// Используем пул соединений вместо одного клиента
+const pool = new Pool({
   connectionString,
   ssl: { rejectUnauthorized: false },
+  max: 10, // максимум соединений в пуле
+  idleTimeoutMillis: 30000, // время жизни неактивного соединения
+  connectionTimeoutMillis: 2000, // таймаут на подключение
 });
 
-let isConnected = false;
-
-async function connectDB() {
-  if (!isConnected) {
-    try {
-      await client.connect();
-      isConnected = true;
-      console.log('Подключение к PostgreSQL установлено');
-      
-      // Создаем таблицу cars если она не существует
-      await createTableIfNotExists();
-    } catch (err) {
-      console.error('Ошибка подключения к базе данных:', err);
-      throw err;
-    }
-  }
-}
+// Обработчик ошибок пула
+pool.on('error', (err) => {
+  console.error('Неожиданная ошибка клиента PostgreSQL:', err);
+});
 
 async function createTableIfNotExists() {
+  const client = await pool.connect();
   try {
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS cars (
@@ -72,12 +64,16 @@ async function createTableIfNotExists() {
   } catch (err) {
     console.error('Ошибка при создании таблицы cars:', err);
     throw err;
+  } finally {
+    client.release(); // возвращаем соединение в пул
   }
 }
 
 async function addCar(car) {
+  const client = await pool.connect();
   try {
-    await connectDB();
+    // Создаем таблицу если это первый запрос
+    await createTableIfNotExists();
     
     const query = `
       INSERT INTO cars (
@@ -108,12 +104,32 @@ async function addCar(car) {
   } catch (err) {
     console.error('Ошибка при добавлении автомобиля:', err);
     throw err;
+  } finally {
+    client.release(); // возвращаем соединение в пул
+  }
+}
+
+// Функция для проверки подключения
+async function checkConnection() {
+  const client = await pool.connect();
+  try {
+    const result = await client.query('SELECT NOW()');
+    console.log('PostgreSQL подключение активно:', result.rows[0].now);
+    return true;
+  } catch (err) {
+    console.error('Ошибка проверки подключения:', err);
+    return false;
+  } finally {
+    client.release();
   }
 }
 
 // Пример использования
 if (require.main === module) {
   (async () => {
+    // Проверяем подключение
+    await checkConnection();
+    
     const newCar = {
       custom_id: 'car-123',
       source_message_id: 456,
@@ -136,4 +152,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { saveCar: addCar }; 
+module.exports = { saveCar: addCar, checkConnection }; 
