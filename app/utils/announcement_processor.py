@@ -25,26 +25,78 @@ def extract_car_details(text: str):
     
     if not text or not isinstance(text, str):
         return details
-        
-    title_match = re.search(r'^(.*?)\s*\[(\d{4})\]', text)
-    if title_match:
+    
+    print(f">> Извлечение данных из текста: {text[:200]}...")
+    
+    # Паттерн 1: [Марка] [Модель] [Год] - формат Perplexity
+    pattern1 = re.search(r'\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[(\d{4})\]', text)
+    if pattern1:
+        details['brand'] = pattern1.group(1).strip()
+        details['model'] = pattern1.group(2).strip()
         try:
-            full_model_name = title_match.group(1).strip()
-            brand_model_parts = full_model_name.split(' ', 1)
-            details['brand'] = brand_model_parts[0]
-            details['model'] = brand_model_parts[1] if len(brand_model_parts) > 1 else None
-            details['year'] = int(title_match.group(2))
-        except (ValueError, IndexError) as e:
-            print(f"Ошибка при извлечении года из текста: {e}")
-            details['year'] = None
-
-    price_match = re.search(r'(?i)Цена:\s*([\d\s,]+)', text)
-    if price_match:
-        try:
-            price_str = price_match.group(1).replace(' ', '').replace(',', '')
-            details['price'] = float(price_str)
-        except (ValueError, TypeError):
+            details['year'] = int(pattern1.group(3))
+        except ValueError:
             pass
+        print(f">> Найдено (паттерн 1): {details['brand']} {details['model']} {details['year']}")
+    
+    # Паттерн 2: Brand Model [Year] - оригинальный формат
+    if not details['brand']:
+        pattern2 = re.search(r'^(.*?)\s*\[(\d{4})\]', text)
+        if pattern2:
+            try:
+                full_model_name = pattern2.group(1).strip()
+                brand_model_parts = full_model_name.split(' ', 1)
+                details['brand'] = brand_model_parts[0]
+                details['model'] = brand_model_parts[1] if len(brand_model_parts) > 1 else None
+                details['year'] = int(pattern2.group(2))
+                print(f">> Найдено (паттерн 2): {details['brand']} {details['model']} {details['year']}")
+            except (ValueError, IndexError) as e:
+                print(f"Ошибка при извлечении года из текста: {e}")
+    
+    # Паттерн 3: Поиск в начале строки "Марка Модель Год"
+    if not details['brand']:
+        lines = text.split('\n')
+        for line in lines[:3]:  # проверяем первые 3 строки
+            line = line.strip()
+            if line and not line.startswith('ID:'):
+                # Ищем год в строке
+                year_match = re.search(r'\b(19|20)\d{2}\b', line)
+                if year_match:
+                    year = int(year_match.group())
+                    # Берем часть строки до года
+                    before_year = line[:year_match.start()].strip()
+                    # Убираем лишние символы
+                    before_year = re.sub(r'[^\w\s]', ' ', before_year).strip()
+                    parts = before_year.split()
+                    if len(parts) >= 2:
+                        details['brand'] = parts[0]
+                        details['model'] = ' '.join(parts[1:])
+                        details['year'] = year
+                        print(f">> Найдено (паттерн 3): {details['brand']} {details['model']} {details['year']}")
+                        break
+
+    # Извлечение цены - несколько паттернов
+    price_patterns = [
+        r'(?i)Цена:\s*([\d\s,]+)',  # Цена: 123456
+        r'(?i)-\s*Цена:\s*([\d\s,]+)',  # - Цена: 123456
+        r'(?i)цена[:\s]+([\d\s,]+)',  # цена 123456
+        r'(\d{3,})\s*₽',  # 123456₽
+        r'(\d{3,})\s*руб',  # 123456 руб
+        r'(\d[\d\s,]{4,})\s*(?:рублей|руб|₽|$)',  # различные варианты
+    ]
+    
+    for pattern in price_patterns:
+        price_match = re.search(pattern, text)
+        if price_match:
+            try:
+                price_str = price_match.group(1).replace(' ', '').replace(',', '')
+                details['price'] = float(price_str)
+                print(f">> Найдена цена: {details['price']}")
+                break
+            except (ValueError, TypeError):
+                continue
+    
+    print(f">> Итоговые данные: brand={details['brand']}, model={details['model']}, year={details['year']}, price={details['price']}")
     return details
 
 async def process_single_announcement(ann, perplexity_processor, source_channel, markup_percentage):
