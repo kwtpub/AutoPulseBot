@@ -17,11 +17,9 @@ from app.utils.channel_parser import convert_telethon_message_to_announcement, f
 from app.pipeline import process_single_announcement
 from app.core.perplexity import PerplexityProcessor
 from app.utils.config import get_pricing_config, set_pricing_config
-from app.commands.start import start, leave_request_entry_callback, handle_leave_request, LEAVE_REQUEST
+from app.commands.start import register_handlers as register_start_handlers, leave_request_entry_callback, handle_leave_request, LEAVE_REQUEST
 from app.commands.chatid import chatid
-from app.commands.admin import (
-    admin_panel, admin_callbacks, handle_set_markup, handle_parser_channel, handle_parser_count, cancel_conversation, SET_MARKUP, PARSER_CHANNEL, PARSER_COUNT
-)
+from app.commands.admin import register_admin_handlers
 
 # --- Конфигурация ---
 load_dotenv()
@@ -57,9 +55,6 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 perplexity_processor = PerplexityProcessor(PERPLEXITY_API_KEY)
 MARKUP_PERCENTAGE = get_pricing_config()
 
-# Состояния для диалога
-SET_MARKUP, PARSER_CHANNEL, PARSER_COUNT = range(3)
-
 # --- Клиент Telethon для прослушивания ---
 client = TelegramClient(
     SESSION_NAME, 
@@ -88,32 +83,7 @@ async def new_post_handler(event):
         print(f"❌ Ошибка при обработке нового поста {event.message.id} из канала {source_channel_url}: {e}")
 
 # --- Обработчики команд бота (python-telegram-bot) ---
-async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отменяет текущий диалог и возвращает в админ-панель."""
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_USER_IDS:
-        await update.message.reply_text("⛔️ Доступ запрещен.")
-        return ConversationHandler.END
-    
-    await update.message.reply_text("❌ Операция отменена.", reply_markup=await get_admin_keyboard())
-    return ConversationHandler.END
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Здравствуйте! Присылайте вашу заявку, и она будет передана менеджеру.")
-
-async def chatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Возвращает ID чата для настройки конфигурации."""
-    chat_id = update.effective_chat.id
-    chat_type = update.effective_chat.type
-    chat_title = update.effective_chat.title or "Личный чат"
-    
-    await update.message.reply_text(
-        f"📋 **Информация о чате:**\n\n"
-        f"🆔 Chat ID: `{chat_id}`\n"
-        f"📝 Тип: {chat_type}\n"
-        f"📛 Название: {chat_title}",
-        parse_mode='Markdown'
-    )
+# (start и chatid теперь только в app/commands/)
 
 async def post_init(application: Application):
     """Действия после инициализации PTB (например, запуск клиента Telethon)."""
@@ -131,10 +101,17 @@ async def post_init(application: Application):
     print("Клиент Telethon для прослушивания канала запущен.")
     print(f"✅ Бот запущен и слушает новые посты в каналах: {', '.join(SOURCE_CHANNELS)}")
 
+async def post_shutdown(application: Application):
+    """Действия при завершении работы бота."""
+    if client.is_connected():
+        print("🔄 Отключение Telethon клиента...")
+        await client.disconnect()
+        print("✅ Telethon клиент отключен.")
+
 # --- Синхронный запуск ---
 def main():
     # Создаём приложение Telegram Bot
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).post_shutdown(post_shutdown).build()
     # Прокидываем переменные для команд
     application.bot_data['ADMIN_GROUP_ID'] = ADMIN_GROUP_ID
     application.bot_data['ADMIN_USER_IDS'] = ADMIN_USER_IDS
@@ -144,36 +121,11 @@ def main():
     application.bot_data['process_single_announcement'] = process_single_announcement
 
     # --- Команды ---
-    application.add_handler(CommandHandler("start", start))
+    register_start_handlers(application)
+    register_admin_handlers(application)
+    
+    # /chatid команда
     application.add_handler(CommandHandler("chatid", chatid))
-
-    # --- Оставить заявку ---
-    from telegram.ext import ConversationHandler, MessageHandler, filters, CallbackQueryHandler
-    leave_request_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(leave_request_entry_callback, pattern="^leave_request$")],
-        states={
-            LEAVE_REQUEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_leave_request)],
-        },
-        fallbacks=[],
-        allow_reentry=True,
-        per_message=True
-    )
-    application.add_handler(leave_request_conv)
-
-    # --- Админ-панель ---
-    admin_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("admin", admin_panel)],
-        states={
-            SET_MARKUP: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_set_markup)],
-            PARSER_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_channel)],
-            PARSER_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_count)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel_conversation)],
-        allow_reentry=True,
-        per_message=True
-    )
-    application.add_handler(admin_conv_handler)
-    application.add_handler(CallbackQueryHandler(admin_callbacks))
 
     # Запуск бота
     application.run_polling()

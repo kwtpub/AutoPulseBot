@@ -1,6 +1,6 @@
 # Админ-панель и все связанные обработчики
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from app.utils.config import set_pricing_config
 from app.utils.channel_parser import fetch_announcements_from_channel
 import asyncio
@@ -8,6 +8,7 @@ import asyncio
 # Эти переменные должны импортироваться из main.py или передаваться через context.application.bot_data
 # ADMIN_USER_IDS, MARKUP_PERCENTAGE, SOURCE_CHANNELS, perplexity_processor
 
+# Состояния для диалога админ-панели
 SET_MARKUP, PARSER_CHANNEL, PARSER_COUNT = range(3)
 
 async def get_admin_keyboard():
@@ -28,35 +29,48 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_USER_IDS:
         await update.message.reply_text("⛔️ Доступ запрещен.")
-        return
+        return ConversationHandler.END
+    
     reply_markup = await get_admin_keyboard()
     message = await update.message.reply_text("⚙️ Админ-панель:", reply_markup=reply_markup)
     context.user_data['admin_message_id'] = message.message_id
+    return ConversationHandler.END
 
 async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ADMIN_USER_IDS = context.application.bot_data['ADMIN_USER_IDS']
     MARKUP_PERCENTAGE = context.application.bot_data['MARKUP_PERCENTAGE']
     SOURCE_CHANNELS = context.application.bot_data['SOURCE_CHANNELS']
     query = update.callback_query
+    
+    # Сохраняем ID сообщения для редактирования
     context.user_data['admin_message_id'] = query.message.message_id
+    
     user_id = query.from_user.id
     if user_id not in ADMIN_USER_IDS:
         await query.answer(show_alert=True, text="⛔️ Доступ запрещен.")
-        return
+        return ConversationHandler.END
+    
     if query.data == 'admin_stats':
         await query.answer()
-        await query.edit_message_text(text="Статистика недоступна (отключена база данных)", reply_markup=await get_admin_keyboard())
+        await query.edit_message_text(
+            text="📊 **Статистика бота**\n\nСтатистика недоступна (отключена база данных)",
+            parse_mode='Markdown',
+            reply_markup=await get_admin_keyboard()
+        )
+        return ConversationHandler.END
+        
     elif query.data == 'admin_set_markup':
         await query.answer()
         await query.edit_message_text(
-            text=f"Текущая наценка: **{MARKUP_PERCENTAGE}%**\n\nВведите новое значение (например, 10 или 12.5):",
+            text=f"💰 **Настройка наценки**\n\nТекущая наценка: **{MARKUP_PERCENTAGE}%**\n\nВведите новое значение (например, 10 или 12.5):",
             parse_mode='Markdown'
         )
         return SET_MARKUP
+        
     elif query.data == 'admin_source_channels':
         await query.answer()
         if not SOURCE_CHANNELS:
-            text = "📡 **Каналы-источники не заданы.**"
+            text = "📡 **Каналы-источники**\n\nКаналы-источники не заданы.\n\n(Задаются в переменной `TELEGRAM_CHANNEL`)"
         else:
             channels_list_str = "\n".join([f"• `{ch}`" for ch in SOURCE_CHANNELS])
             text = f"📡 **Отслеживаемые каналы-источники:**\n\n{channels_list_str}\n\n(Задаются в переменной `TELEGRAM_CHANNEL`)"
@@ -65,20 +79,23 @@ async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=await get_back_keyboard(),
             parse_mode='Markdown'
         )
+        return ConversationHandler.END
+        
     elif query.data == 'admin_parser':
         await query.answer()
         await query.edit_message_text(
             text="🔍 **Парсер каналов**\n\nВведите канал для парсинга (например: @milkos44556):",
-            parse_mode='Markdown',
-            reply_markup=await get_back_keyboard()
+            parse_mode='Markdown'
         )
         return PARSER_CHANNEL
+        
     elif query.data == 'admin_back_to_main':
         await query.answer()
         await query.edit_message_text(
             text="⚙️ Админ-панель:",
             reply_markup=await get_admin_keyboard()
         )
+        return ConversationHandler.END
 
 async def handle_set_markup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     MARKUP_PERCENTAGE = context.application.bot_data['MARKUP_PERCENTAGE']
@@ -237,5 +254,26 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
     if user_id not in ADMIN_USER_IDS:
         await update.message.reply_text("⛔️ Доступ запрещен.")
         return ConversationHandler.END
-    await update.message.reply_text("❌ Операция отменена.", reply_markup=await get_admin_keyboard())
-    return ConversationHandler.END 
+    await update.message.reply_text("❌ Операция отменена.")
+    return ConversationHandler.END
+
+def register_admin_handlers(application):
+    """Регистрирует все обработчики для админ-панели"""
+    
+    # ConversationHandler для админ-панели
+    admin_conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("admin", admin_panel),
+            CallbackQueryHandler(admin_callbacks, pattern="^admin_")
+        ],
+        states={
+            SET_MARKUP: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_set_markup)],
+            PARSER_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_channel)],
+            PARSER_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_parser_count)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_conversation)],
+        allow_reentry=True,
+        per_chat=False
+    )
+    
+    application.add_handler(admin_conv_handler) 
