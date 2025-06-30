@@ -109,6 +109,68 @@ async function addCar(car) {
   }
 }
 
+// Функция для получения автомобиля по custom_id
+async function getCar(custom_id) {
+  const client = await pool.connect();
+  try {
+    const query = 'SELECT * FROM cars WHERE custom_id = $1';
+    const result = await client.query(query, [custom_id]);
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const car = result.rows[0];
+    // Парсим JSON поле photos
+    if (car.photos) {
+      car.photos = JSON.parse(car.photos);
+    }
+    
+    return car;
+  } catch (err) {
+    console.error('Ошибка при получении автомобиля:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Функция для получения всех автомобилей с пагинацией
+async function getAllCars(limit = 10, offset = 0) {
+  const client = await pool.connect();
+  try {
+    // Получаем автомобили с пагинацией
+    const carsQuery = `
+      SELECT * FROM cars 
+      ORDER BY created_at DESC 
+      LIMIT $1 OFFSET $2
+    `;
+    const carsResult = await client.query(carsQuery, [limit, offset]);
+    
+    // Получаем общее количество
+    const countQuery = 'SELECT COUNT(*) FROM cars';
+    const countResult = await client.query(countQuery);
+    
+    const cars = carsResult.rows.map(car => {
+      // Парсим JSON поле photos
+      if (car.photos) {
+        car.photos = JSON.parse(car.photos);
+      }
+      return car;
+    });
+    
+    return {
+      cars,
+      total: parseInt(countResult.rows[0].count)
+    };
+  } catch (err) {
+    console.error('Ошибка при получении списка автомобилей:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Функция для проверки подключения
 async function checkConnection() {
   const client = await pool.connect();
@@ -152,4 +214,9 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { saveCar: addCar, checkConnection }; 
+module.exports = { 
+  saveCar: addCar, 
+  checkConnection, 
+  getCar, 
+  getAllCars 
+}; 

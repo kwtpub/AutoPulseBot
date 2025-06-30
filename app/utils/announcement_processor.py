@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from app.utils.channel_parser import fetch_announcements_from_channel
 from app.core.ocr import OCRProcessor
 from app.core.perplexity import PerplexityProcessor
+from app.core.cloudinary_uploader import upload_image_to_cloudinary, get_image_url_from_cloudinary
 from app.utils.message_formatter import MessageFormatter
 from app.core.telegram import send_message_to_channel, send_message_with_photos_to_channel
 from app.utils.config import get_telegram_config, get_pricing_config
@@ -135,9 +136,27 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
     msg = msg.strip() + "\n\nКонтакт: @VroomMarketManager"
 
     car_details = extract_car_details(msg)
-    uploaded_photo_urls = ann.get("photos", [])
+    
+    # Загрузка фотографий в Cloudinary
+    cloudinary_urls = []
+    if ann.get("photos"):
+        print(f">> Загрузка {len(ann['photos'])} фото в Cloudinary...")
+        for i, photo_path in enumerate(ann["photos"]):
+            if os.path.exists(photo_path):
+                # Создаем уникальный public_id для Cloudinary
+                public_id = f"car_{custom_id}_{i+1}"
+                
+                # Загружаем в Cloudinary
+                upload_result = upload_image_to_cloudinary(photo_path, public_id=public_id)
+                if upload_result and upload_result.get('secure_url'):
+                    cloudinary_url = upload_result['secure_url']
+                    cloudinary_urls.append(cloudinary_url)
+                    print(f">> Фото {i+1} загружено в Cloudinary: {cloudinary_url}")
+                else:
+                    print(f">> Ошибка загрузки фото {i+1} в Cloudinary")
+        print(f">> Загружено в Cloudinary: {len(cloudinary_urls)} из {len(ann['photos'])} фото")
 
-    # Отправка сообщения в Telegram канал
+    # Отправка сообщения в Telegram канал (используем локальные файлы для Telegram)
     target_msg_id, _ = await send_message_with_photos_to_channel(msg, ann["photos"])
 
     # Формируем car_dict для Node.js API
@@ -151,7 +170,7 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
         "year": car_details.get('year'),
         "price": car_details.get('price'),
         "description": msg,
-        "photos": uploaded_photo_urls,
+        "photos": cloudinary_urls,  # Используем URL-ы из Cloudinary
         "status": 'available' if target_msg_id else 'error',
         "created_at": datetime.utcnow().isoformat()
     }

@@ -68,6 +68,62 @@ def get_image_url_from_cloudinary(public_id: str, transformations: dict = None) 
         print(f"Ошибка при получении URL для public_id {public_id} из Cloudinary: {e}")
         return None
 
+def get_car_photos_urls(custom_id: str, count: int = 10) -> list:
+    """
+    Получает список URL-ов всех фотографий автомобиля из Cloudinary по custom_id.
+    
+    :param custom_id: Уникальный ID автомобиля
+    :param count: Максимальное количество фотографий для поиска (по умолчанию 10)
+    :return: Список URL-ов фотографий
+    """
+    if not CLOUDINARY_URL and not os.getenv("CLOUDINARY_CLOUD_NAME"):
+        print("Ошибка: Cloudinary не сконфигурирован. Получение URL невозможно.")
+        return []
+    
+    photo_urls = []
+    for i in range(1, count + 1):
+        public_id = f"car_{custom_id}_{i}"
+        try:
+            # Проверяем существование изображения и получаем URL
+            url = cloudinary.CloudinaryImage(public_id).build_url()
+            if url:
+                photo_urls.append(url)
+        except Exception as e:
+            # Если фото с таким public_id не найдено, прекращаем поиск
+            break
+    
+    return photo_urls
+
+def get_car_photo_thumbnails(custom_id: str, count: int = 10, width: int = 300, height: int = 200) -> list:
+    """
+    Получает список URL-ов миниатюр всех фотографий автомобиля из Cloudinary.
+    
+    :param custom_id: Уникальный ID автомобиля
+    :param count: Максимальное количество фотографий для поиска
+    :param width: Ширина миниатюры
+    :param height: Высота миниатюры
+    :return: Список URL-ов миниатюр
+    """
+    if not CLOUDINARY_URL and not os.getenv("CLOUDINARY_CLOUD_NAME"):
+        print("Ошибка: Cloudinary не сконфигурирован. Получение URL невозможно.")
+        return []
+    
+    thumbnail_urls = []
+    for i in range(1, count + 1):
+        public_id = f"car_{custom_id}_{i}"
+        try:
+            # Создаем миниатюру с трансформацией
+            url = cloudinary.CloudinaryImage(public_id).build_url(
+                transformation={'width': width, 'height': height, 'crop': 'fill'}
+            )
+            if url:
+                thumbnail_urls.append(url)
+        except Exception as e:
+            # Если фото с таким public_id не найдено, прекращаем поиск
+            break
+    
+    return thumbnail_urls
+
 if __name__ == '__main__':
     # Пример использования (для этого нужно иметь файл test.jpg в корне проекта или указать другой путь)
     # и установленный CLOUDINARY_URL в переменных окружения
