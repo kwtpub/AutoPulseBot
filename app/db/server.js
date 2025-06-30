@@ -1,20 +1,34 @@
 const express = require('express');
-const { addCar } = require('./car');
-require('dotenv').config();
+const { saveCar } = require('./car');
+require('dotenv').config({ path: '../../.env' });
 
 const app = express();
 app.use(express.json());
 
-app.post('/add-car', async (req, res) => {
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    message: 'Node.js API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/api/cars', async (req, res) => {
   try {
-    const car = await addCar(req.body);
-    res.json({ success: true, car });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    const carData = req.body;
+    const result = await saveCar(carData);
+    res.status(201).json({ success: true, car: result });
+  } catch (error) {
+    console.error('Error saving car:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to save car' 
+    });
   }
 });
 
 const PORT = process.env.NODE_PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Node.js car API server running on port ${PORT}`);
+  console.log(`Node.js API server running on port ${PORT}`);
 }); 

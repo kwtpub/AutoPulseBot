@@ -10,7 +10,6 @@ paddleocr>=2.7.3
 transformers>=4.36.2
 requests>=2.31.0
 torch>=2.1.2
-SQLAlchemy==2.0.30
 psycopg2-binary>=2.9.9
 cloudinary>=1.39.1
 watchdog==4.0.1

@@ -39,7 +39,7 @@ known_third_party = [
     "transformers",
     "requests",
     "torch",
-    "sqlalchemy",
+
     "watchdog",
     "aiohttp",
     "dotenv",

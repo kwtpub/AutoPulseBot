@@ -6,6 +6,7 @@ Health check script for Telegram Auto Post Bot
 import asyncio
 import json
 import sys
+import aiohttp
 from pathlib import Path
 from typing import Dict, Any
 
@@ -15,7 +16,6 @@ sys.path.insert(0, str(project_root))
 
 from app.utils.config import get_pricing_config
 from app.core.perplexity import PerplexityProcessor
-from app.bot.database import Database
 
 
 class HealthChecker:
@@ -40,19 +40,25 @@ class HealthChecker:
             }
             return False
     
-    async def check_database(self) -> bool:
-        """Проверка базы данных."""
+    async def check_database_api(self) -> bool:
+        """Проверка Node.js API для базы данных."""
         try:
-            db = Database()
-            # Проверяем подключение к БД
-            db.get_applications()
-            self.results['database'] = {
-                'status': 'healthy',
-                'message': 'Database connection successful'
-            }
-            return True
+            async with aiohttp.ClientSession() as session:
+                async with session.get('http://localhost:3001/api/health') as response:
+                    if response.status == 200:
+                        self.results['database_api'] = {
+                            'status': 'healthy',
+                            'message': 'Node.js API connection successful'
+                        }
+                        return True
+                    else:
+                        self.results['database_api'] = {
+                            'status': 'unhealthy',
+                            'error': f'API returned status {response.status}'
+                        }
+                        return False
         except Exception as e:
-            self.results['database'] = {
+            self.results['database_api'] = {
                 'status': 'unhealthy',
                 'error': str(e)
             }
@@ -100,7 +106,7 @@ class HealthChecker:
         """Запуск всех проверок."""
         checks = [
             self.check_config,
-            self.check_database,
+            self.check_database_api,
             self.check_perplexity,
             self.check_filesystem
         ]
