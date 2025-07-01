@@ -13,7 +13,66 @@ import sys
 import shutil
 import random
 from app.storage_api.legacy_wrapper import save_car_with_formatting
+import re
 
+
+def format_perplexity_response_with_quotes(response_text: str) -> str:
+    """
+    Форматирует ответ от Perplexity, оборачивая технические характеристики в HTML цитаты.
+    Обрабатывает как простой текст, так и Markdown разметку.
+    
+    Args:
+        response_text: Текст ответа от Perplexity
+        
+    Returns:
+        Отформатированный текст с HTML цитатами
+    """
+    if not response_text:
+        return response_text
+    
+    # Расширенные паттерны для поиска технических характеристик
+    tech_patterns = [
+        # Обычный текст
+        r'((?:🛠️?\s*)?(?:\*\*)?Технические характеристики(?:\*\*)?\s*\n)(.*?)(?=\n\n[🛡📱📄💳#]|$)',
+        r'((?:🛠️?\s*)?(?:\*\*)?Характеристики(?:\*\*)?\s*\n)(.*?)(?=\n\n[🛡📱📄💳#]|$)',
+        # С эмодзи и возможной markdown разметкой
+        r'(🛠.*?(?:\*\*)?характеристики(?:\*\*)?\s*\n)(.*?)(?=\n\n[🛡📱📄💳#]|$)',
+    ]
+    
+    formatted_text = response_text
+    
+    for pattern in tech_patterns:
+        match = re.search(pattern, formatted_text, re.DOTALL | re.IGNORECASE)
+        if match:
+            header = match.group(1).strip()
+            content = match.group(2).strip()
+            
+            # Проверяем, что контент не пустой и содержит характеристики
+            if content and ('двигатель' in content.lower() or 'коробка' in content.lower() or 'привод' in content.lower() or 'пробег' in content.lower()):
+                
+                # Очищаем Markdown разметку из контента
+                cleaned_content = content
+                # Убираем ** для жирного текста
+                cleaned_content = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned_content)
+                # Убираем - в начале строк (markdown списки)
+                cleaned_content = re.sub(r'^- ', '', cleaned_content, flags=re.MULTILINE)
+                # Убираем лишние пробелы в конце строк
+                cleaned_content = re.sub(r'  +$', '', cleaned_content, flags=re.MULTILINE)
+                
+                # Очищаем заголовок от markdown
+                clean_header = re.sub(r'\*\*(.*?)\*\*', r'\1', header)
+                clean_header = clean_header.replace('🛠️', '🛠').strip()  # Нормализуем эмодзи
+                
+                # Оборачиваем характеристики в blockquote
+                quoted_content = f"<blockquote>{cleaned_content}</blockquote>"
+                
+                # Заменяем в исходном тексте
+                original_section = match.group(0)
+                new_section = f"{clean_header}\n{quoted_content}"
+                formatted_text = formatted_text.replace(original_section, new_section)
+                break
+    
+    return formatted_text
 
 
 async def process_single_announcement(ann, perplexity_processor, source_channel, markup_percentage):
@@ -50,7 +109,7 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
     
     # Подготавливаем данные автомобиля для нового формата
     # Применяем наценку к цене с сохранением оригинальной валюты
-    from app.perplexity_api.text_formatter import format_price_with_markup
+    from app.perplexity_api.text_formatter import format_price_with_markup, apply_markup_to_price
     
     # Формируем цену с наценкой в оригинальной валюте
     price_with_markup = format_price_with_markup(car_info, markup_percentage)
@@ -60,9 +119,9 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
         'model': car_info.model if car_info.model else 'Не указана',
         'year': str(car_info.year) if car_info.year else '2023',
         'mileage': str(car_info.mileage) if car_info.mileage else '50000',
-        'price': price_with_markup,  # Цена с наценкой в оригинальной валюте
+        'price': price_with_markup,  # Цена с наценкой в долларах
         'original_price': car_info.price,  # Оригинальная цена для базы данных
-        'currency': car_info.currency,  # Валюта
+        'currency': 'USD',  # Всегда доллары
         'engine': car_info.engine_volume + 'л, бензин' if car_info.engine_volume else '2.0л, бензин',
         'transmission': car_info.transmission if car_info.transmission else 'автомат',
         'drive_type': car_info.drive_type if car_info.drive_type else 'передний',
@@ -81,11 +140,12 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
         from app.perplexity_api.text_formatter import CarInfo, create_car_description_prompt
         
         # Создаем объект CarInfo на основе данных
-        car_info = CarInfo(
+        final_price = apply_markup_to_price(car_info.price, markup_percentage) if car_info.price else 25000
+        car_info_for_prompt = CarInfo(
             brand=car_data['brand'],
             model=car_data['model'],
             year=car_data['year'],
-            price=car_data['price'],
+            price=final_price,  # Числовое значение цены с наценкой
             mileage=car_data['mileage'],
             engine_volume=car_data['engine'],
             transmission=car_data['transmission'],
@@ -98,13 +158,17 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
         
         # Создаем промпт для онлайн-продажи китайских авто
         prompt = create_car_description_prompt(
-            car_info, 
+            car_info_for_prompt, 
             custom_context=f"Дополнительная информация из объявления: {ann['text']}\nДанные OCR: {ocr_data}"
         )
         
         print(">> Отправка запроса в Perplexity API с новым промптом...")
         msg = await perplexity_processor.process_text(prompt)
         print(">> Ответ от Perplexity получен.")
+        
+        # Форматируем ответ с HTML цитатами
+        msg = format_perplexity_response_with_quotes(msg)
+        print(">> Ответ отформатирован с HTML цитатами.")
     else:
         # Используем стандартный шаблон без Perplexity
         msg = formatter.format_for_telegram(car_data)

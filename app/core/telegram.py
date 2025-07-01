@@ -151,7 +151,7 @@ async def send_message_to_channel(message: str, button_text: str = None, button_
 
     client = TelegramClient(StringSession(session_string), api_id, api_hash)
     await client.start()
-    await client.send_message(channel_id, message, buttons=buttons)
+    await client.send_message(channel_id, message, buttons=buttons, parse_mode='html')
     await client.disconnect()
 
 def is_photo_message(msg):
@@ -232,10 +232,10 @@ async def send_message_with_photos_to_channel(text: str, photo_paths: list):
         try:
             # Отправляем пост
             if not photo_paths:
-                sent_message = await client.send_message(target_channel_id, text)
+                sent_message = await client.send_message(target_channel_id, text, parse_mode='html')
                 photo_file_ids = []
             else:
-                sent_message = await client.send_file(target_channel_id, photo_paths, caption=text)
+                sent_message = await client.send_file(target_channel_id, photo_paths, caption=text, parse_mode='html')
                 # Если это альбом, sent_message будет списком. Берем первый для ID.
                 message_to_process = sent_message[0] if isinstance(sent_message, list) else sent_message
                 # Извлекаем file_id для каждой фотографии

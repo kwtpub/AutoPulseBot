@@ -61,13 +61,18 @@ def format_car_message(car_data: dict) -> str:
         except:
             message += f"💰 **Цена:** {car_data['price']}\n\n"
     
-    # Описание
+    # Описание (сокращенное)
     if car_data.get('description'):
         # Убираем ID из начала описания для чистоты
         description = car_data['description']
         if description.startswith('ID:'):
             lines = description.split('\n')
             description = '\n'.join(lines[1:]).strip()
+        
+        # Ограничиваем длину описания для Telegram caption
+        if len(description) > 300:
+            description = description[:300] + "..."
+        
         message += f"📝 **Описание:**\n{description}\n\n"
     
     # Техническая информация
@@ -90,6 +95,10 @@ def format_car_message(car_data: dict) -> str:
         message += f"📅 **Добавлено:** {car_data['created_at'][:10]}\n"
     
     message += "\n📞 **Контакт:** @VroomMarketManager"
+    
+    # Проверяем длину сообщения для Telegram caption (лимит 1024 символа)
+    if len(message) > 1000:
+        message = message[:950] + "...\n\n📞 **Контакт:** @VroomMarketManager"
     
     return message
 
@@ -117,8 +126,23 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     try:
+        # Обновляем статус: подключение к базе
+        await loading_message.edit_text(
+            f"🔍 Поиск автомобиля с ID: `{custom_id}`...\n"
+            f"📡 Подключение к базе данных...",
+            parse_mode='Markdown'
+        )
+        
         # Получаем данные из API
         car_data = await get_car_from_api(custom_id)
+        
+        # Обновляем статус: обработка данных
+        await loading_message.edit_text(
+            f"🔍 Поиск автомобиля с ID: `{custom_id}`...\n"
+            f"✅ Данные получены\n"
+            f"⚙️ Обработка информации...",
+            parse_mode='Markdown'
+        )
         
         if not car_data:
             await loading_message.edit_text(
@@ -129,9 +153,6 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-        # Удаляем сообщение о загрузке
-        await loading_message.delete()
-        
         # Форматируем сообщение
         message = format_car_message(car_data)
         
@@ -139,6 +160,15 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         photos = car_data.get('photos', [])
         
         if photos and len(photos) > 0:
+            # Обновляем статус: загрузка фото
+            await loading_message.edit_text(
+                f"🔍 Поиск автомобиля с ID: `{custom_id}`...\n"
+                f"✅ Данные получены\n"
+                f"✅ Информация обработана\n"
+                f"📸 Загрузка фотографий ({len(photos)} шт.)...",
+                parse_mode='Markdown'
+            )
+            
             # Скачиваем фотографии
             photo_files = []
             for i, photo_url in enumerate(photos[:10]):  # Максимум 10 фото
@@ -150,6 +180,16 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await asyncio.sleep(0.3)
             
             if photo_files:
+                # Обновляем статус: отправка результата
+                await loading_message.edit_text(
+                    f"🔍 Поиск автомобиля с ID: `{custom_id}`...\n"
+                    f"✅ Данные получены\n"
+                    f"✅ Информация обработана\n"
+                    f"✅ Фотографии загружены ({len(photo_files)} шт.)\n"
+                    f"📤 Отправка результата...",
+                    parse_mode='Markdown'
+                )
+                
                 try:
                     if len(photo_files) == 1:
                         # Одно фото - отправляем с подписью
@@ -158,6 +198,9 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             caption=message,
                             parse_mode='Markdown'
                         )
+                        
+                        # Удаляем сообщение загрузки
+                        await loading_message.delete()
                     else:
                         # Много фото - отправляем медиа-группу с подписью к первому фото
                         from telegram import InputMediaPhoto as TelegramInputMediaPhoto
@@ -175,6 +218,9 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=update.effective_chat.id,
                             media=media_group
                         )
+                        
+                        # Удаляем сообщение загрузки
+                        await loading_message.delete()
                 except Exception as e:
                     if "flood" in str(e).lower() or "too many requests" in str(e).lower():
                         logger.warning(f"Telegram флуд-лимит при отправке фото: {e}")
@@ -199,11 +245,24 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode='Markdown'
                 )
         else:
+            # Обновляем статус: отправка без фото
+            await loading_message.edit_text(
+                f"🔍 Поиск автомобиля с ID: `{custom_id}`...\n"
+                f"✅ Данные получены\n"
+                f"✅ Информация обработана\n"
+                f"⚠️ Фотографии отсутствуют\n"
+                f"📤 Отправка результата...",
+                parse_mode='Markdown'
+            )
+            
             # Нет фотографий, отправляем только текст
             await update.message.reply_text(
                 message,
                 parse_mode='Markdown'
             )
+            
+            # Удаляем сообщение загрузки
+            await loading_message.delete()
         
         # Отправляем отдельное сообщение с кнопкой для связи с менеджером
         contact_message = (
