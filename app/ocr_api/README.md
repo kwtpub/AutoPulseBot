@@ -267,7 +267,7 @@ python test_ocr.py
 
 ```python
 # Старый код
-from app.core.ocr import OCRProcessor
+from app.ocr_api.legacy_wrapper import OCRProcessor
 
 # Новый код (полная совместимость)
 from app.ocr_api.legacy_wrapper import OCRProcessor

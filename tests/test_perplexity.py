@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock
-from app.core.perplexity import PerplexityProcessor
+from app.perplexity_api.legacy_wrapper import PerplexityProcessor
 
 
 class TestPerplexityProcessor:

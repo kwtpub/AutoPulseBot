@@ -252,7 +252,7 @@ class OCRClient:
             if e.response.status_code == 401:
                 # Попытка обновить токен через yandex_auth модуль
                 try:
-                    from app.core.yandex_auth import check_and_refresh_iam_token
+                    from .yandex_auth import check_and_refresh_iam_token
                     await check_and_refresh_iam_token()
                     # Обновляем токен и повторяем запрос
                     self.config.yandex_iam_token = os.getenv('YANDEX_IAM_TOKEN')

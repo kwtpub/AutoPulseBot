@@ -3,8 +3,8 @@ import asyncio
 from dotenv import load_dotenv
 from app.utils.channel_parser import fetch_announcements_from_channel
 from app.ocr_api.legacy_wrapper import OCRProcessor
-from app.core.perplexity import PerplexityProcessor
-from app.core.cloudinary_uploader import upload_image_to_cloudinary, get_image_url_from_cloudinary
+from app.perplexity_api.legacy_wrapper import PerplexityProcessor
+from app.cloudinary_api.legacy_wrapper import upload_image_to_cloudinary, get_image_url_from_cloudinary
 from app.utils.message_formatter import MessageFormatter
 from app.core.telegram import send_message_to_channel, send_message_with_photos_to_channel
 from app.utils.config import get_telegram_config, get_pricing_config

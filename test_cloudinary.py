@@ -5,7 +5,7 @@
 import os
 import asyncio
 from dotenv import load_dotenv
-from app.core.cloudinary_uploader import upload_image_to_cloudinary, get_car_photos_urls, get_car_photo_thumbnails
+from app.cloudinary_api.legacy_wrapper import upload_image_to_cloudinary, get_car_photos_urls, get_car_photo_thumbnails
 
 load_dotenv()
 

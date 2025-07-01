@@ -15,7 +15,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from app.utils.config import get_pricing_config
-from app.core.perplexity import PerplexityProcessor
+from app.perplexity_api.legacy_wrapper import PerplexityProcessor
 
 
 class HealthChecker:

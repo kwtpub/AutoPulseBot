@@ -15,7 +15,7 @@ from telethon import TelegramClient, events
 # --- Наши модули ---
 from app.utils.channel_parser import convert_telethon_message_to_announcement, fetch_announcements_from_channel
 from app.utils.announcement_processor import process_single_announcement
-from app.core.perplexity import PerplexityProcessor
+from app.perplexity_api.legacy_wrapper import PerplexityProcessor
 from app.utils.config import get_pricing_config, set_pricing_config
 from app.commands.start import register_handlers as register_start_handlers, leave_request_entry_callback, handle_leave_request, LEAVE_REQUEST
 from app.commands.chatid import chatid
