@@ -18,61 +18,39 @@ import re
 
 def format_perplexity_response_with_quotes(response_text: str) -> str:
     """
-    Форматирует ответ от Perplexity, оборачивая технические характеристики в HTML цитаты.
-    Обрабатывает как простой текст, так и Markdown разметку.
+    Очищает ответ от Perplexity от остатков Markdown и проверяет HTML форматирование
     
     Args:
         response_text: Текст ответа от Perplexity
         
     Returns:
-        Отформатированный текст с HTML цитатами
+        Очищенный текст в HTML формате
     """
     if not response_text:
         return response_text
     
-    # Расширенные паттерны для поиска технических характеристик
-    tech_patterns = [
-        # Обычный текст
-        r'((?:🛠️?\s*)?(?:\*\*)?Технические характеристики(?:\*\*)?\s*\n)(.*?)(?=\n\n[🛡📱📄💳#]|$)',
-        r'((?:🛠️?\s*)?(?:\*\*)?Характеристики(?:\*\*)?\s*\n)(.*?)(?=\n\n[🛡📱📄💳#]|$)',
-        # С эмодзи и возможной markdown разметкой
-        r'(🛠.*?(?:\*\*)?характеристики(?:\*\*)?\s*\n)(.*?)(?=\n\n[🛡📱📄💳#]|$)',
-    ]
+    # Удаляем остатки Markdown если они есть
+    cleaned_text = response_text
     
-    formatted_text = response_text
+    # Убираем ** для жирного текста (если остались)
+    cleaned_text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', cleaned_text)
     
-    for pattern in tech_patterns:
-        match = re.search(pattern, formatted_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            header = match.group(1).strip()
-            content = match.group(2).strip()
-            
-            # Проверяем, что контент не пустой и содержит характеристики
-            if content and ('двигатель' in content.lower() or 'коробка' in content.lower() or 'привод' in content.lower() or 'пробег' in content.lower()):
-                
-                # Очищаем Markdown разметку из контента
-                cleaned_content = content
-                # Убираем ** для жирного текста
-                cleaned_content = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned_content)
-                # Убираем - в начале строк (markdown списки)
-                cleaned_content = re.sub(r'^- ', '', cleaned_content, flags=re.MULTILINE)
-                # Убираем лишние пробелы в конце строк
-                cleaned_content = re.sub(r'  +$', '', cleaned_content, flags=re.MULTILINE)
-                
-                # Очищаем заголовок от markdown
-                clean_header = re.sub(r'\*\*(.*?)\*\*', r'\1', header)
-                clean_header = clean_header.replace('🛠️', '🛠').strip()  # Нормализуем эмодзи
-                
-                # Оборачиваем характеристики в blockquote
-                quoted_content = f"<blockquote>{cleaned_content}</blockquote>"
-                
-                # Заменяем в исходном тексте
-                original_section = match.group(0)
-                new_section = f"{clean_header}\n{quoted_content}"
-                formatted_text = formatted_text.replace(original_section, new_section)
-                break
+    # Убираем * для курсива (если остались)
+    cleaned_text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', cleaned_text)
     
-    return formatted_text
+    # Убираем - в начале строк (markdown списки)
+    cleaned_text = re.sub(r'^- ', '', cleaned_text, flags=re.MULTILINE)
+    
+    # Убираем > в начале строк (markdown цитаты) - они уже должны быть в <blockquote>
+    cleaned_text = re.sub(r'^> ', '', cleaned_text, flags=re.MULTILINE)
+    
+    # Убираем лишние пробелы в конце строк
+    cleaned_text = re.sub(r'  +$', '', cleaned_text, flags=re.MULTILINE)
+    
+    # Убираем лишние пустые строки
+    cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
+    
+    return cleaned_text.strip()
 
 
 async def process_single_announcement(ann, perplexity_processor, source_channel, markup_percentage):
