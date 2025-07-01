@@ -29,6 +29,7 @@ class CarInfo:
 def extract_car_info_from_text(text: str) -> CarInfo:
     """
     Извлекает информацию об автомобиле из текста объявления
+    Многоэтапная система с несколькими уровнями fallback
     
     Args:
         text: Текст объявления
@@ -36,45 +37,191 @@ def extract_car_info_from_text(text: str) -> CarInfo:
     Returns:
         CarInfo с извлеченными данными
     """
+    print(f"🔍 ЭТАП 0: Входной текст ({len(text)} символов):\n{text[:300]}...")
+    
     car_info = CarInfo()
     text_lower = text.lower()
     
-    # Извлечение марки и модели (первая строка текста, обычно содержит марку и модель)
-    lines = text.strip().split('\n')
-    first_line = lines[0].strip() if lines else ""
+    # Подготавливаем строки для анализа
+    lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
+    first_line = lines[0] if lines else ""
     
-    # Список популярных китайских марок для распознавания
-    chinese_brands = [
-        'geely', 'chery', 'byd', 'haval', 'great wall', 'changan', 'dongfeng',
-        'faw', 'jac', 'lifan', 'zotye', 'brilliance', 'foton', 'maxus',
-        'tank', 'ora', 'li auto', 'nio', 'xpeng', 'aiways', 'lixiang'
-    ]
+    print(f"🔍 ЭТАП 1: Анализ первой строки: '{first_line}'")
     
-    # Ищем марку в первой строке
-    first_line_lower = first_line.lower()
-    for brand in chinese_brands:
-        if brand in first_line_lower:
-            # Находим позицию марки
-            brand_pos = first_line_lower.find(brand)
-            # Извлекаем часть после марки как модель
-            after_brand = first_line[brand_pos + len(brand):].strip()
-            
-            # Убираем год из модели если он есть
-            year_pattern = r'\s*(19|20)\d{2}.*'
-            model_without_year = re.sub(year_pattern, '', after_brand).strip()
-            
-            car_info.brand = brand.title()
-            car_info.model = model_without_year if model_without_year else "Неизвестная модель"
+    # Расширенный список марок с вариантами написания
+    brands_mapping = {
+        # Китайские марки
+        'geely': ['geely', 'джили', 'гили'],
+        'chery': ['chery', 'чери', 'черри'],
+        'byd': ['byd', 'бид', 'би-ай-ди'],
+        'haval': ['haval', 'хавал', 'хаваль'],
+        'great wall': ['great wall', 'грейт волл', 'великая стена'],
+        'changan': ['changan', 'чанган', 'чангань'],
+        'dongfeng': ['dongfeng', 'донгфенг'],
+        'faw': ['faw', 'фав'],
+        'jac': ['jac', 'жак', 'джак'],
+        'lifan': ['lifan', 'лифан'],
+        'zotye': ['zotye', 'зотье'],
+        'brilliance': ['brilliance', 'бриллианс'],
+        'foton': ['foton', 'фотон'],
+        'maxus': ['maxus', 'максус'],
+        'tank': ['tank', 'танк'],
+        'ora': ['ora', 'ора'],
+        'nio': ['nio', 'нио'],
+        'xpeng': ['xpeng', 'икспенг'],
+        'hongqi': ['hongqi', 'хунци'],
+        'gac': ['gac', 'гак'],
+        'roewe': ['roewe', 'роеве'],
+        'mg': ['mg', 'мг'],
+        'baojun': ['baojun', 'баоцзюнь'],
+        'wuling': ['wuling', 'вулинг'],
+        'lynk': ['lynk', 'линк'],
+        # Популярные международные
+        'toyota': ['toyota', 'тойота'],
+        'honda': ['honda', 'хонда'],
+        'nissan': ['nissan', 'ниссан'],
+        'mazda': ['mazda', 'мазда'],
+        'hyundai': ['hyundai', 'хюндай', 'хендай'],
+        'kia': ['kia', 'киа'],
+        'volkswagen': ['volkswagen', 'фольксваген', 'vw'],
+        'audi': ['audi', 'ауди'],
+        'bmw': ['bmw', 'бмв'],
+        'mercedes': ['mercedes', 'мерседес', 'mercedes-benz'],
+        'ford': ['ford', 'форд'],
+        'chevrolet': ['chevrolet', 'шевроле'],
+        'opel': ['opel', 'опель'],
+        'renault': ['renault', 'рено'],
+        'peugeot': ['peugeot', 'пежо'],
+        'volvo': ['volvo', 'вольво'],
+        'skoda': ['skoda', 'шкода'],
+        'lexus': ['lexus', 'лексус'],
+        'infiniti': ['infiniti', 'инфинити']
+    }
+    
+    # ЭТАП 1: Поиск марки в первой строке
+    found_brand = None
+    brand_variants = None
+    
+    for brand_key, variants in brands_mapping.items():
+        for variant in variants:
+            if variant in first_line.lower():
+                found_brand = brand_key
+                brand_variants = variants
+                print(f"✅ ЭТАП 1: Найдена марка '{brand_key}' (вариант '{variant}') в первой строке")
+                break
+        if found_brand:
             break
     
-    # Если марка не найдена, попробуем извлечь из начала строки
-    if not car_info.brand and first_line:
-        # Ищем паттерн "Слово Слово год"
-        brand_model_pattern = r'^([A-Za-zА-Яа-я]+)\s+([A-Za-zА-Яа-я0-9\s]+?)\s+(\d{4})'
-        match = re.search(brand_model_pattern, first_line)
-        if match:
-            car_info.brand = match.group(1).title()
-            car_info.model = match.group(2).strip()
+    # Если найдена марка в первой строке, извлекаем модель
+    if found_brand:
+        # Ищем позицию марки
+        brand_pos = -1
+        used_variant = None
+        for variant in brand_variants:
+            pos = first_line.lower().find(variant)
+            if pos != -1:
+                brand_pos = pos
+                used_variant = variant
+                break
+        
+        if brand_pos != -1:
+            # Извлекаем часть после марки
+            after_brand = first_line[brand_pos + len(used_variant):].strip()
+            # Убираем год если есть
+            model_clean = re.sub(r'\s*(19|20)\d{2}.*', '', after_brand).strip()
+            # Убираем лишние символы
+            model_clean = re.sub(r'[^\w\s-]', '', model_clean).strip()
+            
+            car_info.brand = found_brand.title()
+            car_info.model = model_clean if model_clean else "Неизвестная модель"
+            print(f"✅ ЭТАП 1: Марка={car_info.brand}, Модель={car_info.model}")
+    
+    # ЭТАП 2: Если не найдено - поиск по паттернам
+    if not car_info.brand:
+        print("🔍 ЭТАП 2: Поиск через регулярные выражения")
+        
+        patterns = [
+            r'^([A-Za-zА-Яа-я-]+)\s+([A-Za-zА-Яа-я0-9\s-]+?)\s*(\d{4})',  # Марка Модель Год
+            r'^([A-Za-zА-Яа-я-]+)\s+([A-Za-zА-Яа-я0-9\s-]+)',  # Марка Модель
+            r'([A-Za-zА-Яа-я-]+)\s+([A-Za-zА-Яа-я0-9\s-]+?)\s*(\d{4})',  # Марка Модель Год (в любом месте)
+        ]
+        
+        for i, pattern in enumerate(patterns):
+            match = re.search(pattern, first_line)
+            if match:
+                potential_brand = match.group(1).strip()
+                potential_model = match.group(2).strip()
+                
+                # Проверяем, что это не служебные слова
+                service_words = ['продам', 'продается', 'авто', 'автомобиль', 'машина', 'цена', 'год', 'состояние']
+                if potential_brand.lower() not in service_words and len(potential_brand) > 2:
+                    car_info.brand = potential_brand.title()
+                    car_info.model = potential_model
+                    print(f"✅ ЭТАП 2.{i+1}: Найдено через паттерн - Марка={car_info.brand}, Модель={car_info.model}")
+                    break
+    
+    # ЭТАП 3: Поиск марки по всему тексту
+    if not car_info.brand:
+        print("🔍 ЭТАП 3: Поиск марки по всему тексту")
+        
+        for brand_key, variants in brands_mapping.items():
+            for variant in variants:
+                # Ищем как отдельное слово
+                pattern = rf'\b{re.escape(variant)}\b'
+                match = re.search(pattern, text_lower)
+                if match:
+                    car_info.brand = brand_key.title()
+                    
+                    # Пытаемся найти модель рядом
+                    start = max(0, match.start() - 30)
+                    end = min(len(text), match.end() + 50)
+                    context = text[start:end]
+                    
+                    # Ищем слова после марки
+                    words_after = context[match.end()-start:].split()[:4]
+                    model_words = []
+                    for word in words_after:
+                        clean_word = re.sub(r'[^\w-]', '', word)
+                        if clean_word and not clean_word.isdigit() and len(clean_word) > 1:
+                            model_words.append(clean_word)
+                        if len(model_words) >= 2:  # Берем максимум 2 слова для модели
+                            break
+                    
+                    car_info.model = ' '.join(model_words) if model_words else "Неизвестная модель"
+                    print(f"✅ ЭТАП 3: Найдено в тексте - Марка={car_info.brand}, Модель={car_info.model}")
+                    break
+            if car_info.brand:
+                break
+    
+    # ЭТАП 4: Экстренный fallback - берем первые подходящие слова
+    if not car_info.brand:
+        print("🔍 ЭТАП 4: Экстренный fallback")
+        
+        # Очищаем первую строку от мусора
+        clean_line = re.sub(r'[^\w\s-]', ' ', first_line)
+        words = [w for w in clean_line.split() if w.isalpha() and len(w) > 2]
+        
+        if len(words) >= 2:
+            # Исключаем служебные слова
+            service_words = {'продам', 'продается', 'авто', 'автомобиль', 'машина', 'цена', 'год', 'состояние', 'пробег'}
+            filtered_words = [w for w in words if w.lower() not in service_words]
+            
+            if len(filtered_words) >= 2:
+                car_info.brand = filtered_words[0].title()
+                car_info.model = filtered_words[1].title()
+                print(f"✅ ЭТАП 4: Fallback - Марка={car_info.brand}, Модель={car_info.model}")
+            elif len(filtered_words) == 1:
+                car_info.brand = filtered_words[0].title()
+                car_info.model = "Неизвестная модель"
+                print(f"✅ ЭТАП 4: Fallback - только марка={car_info.brand}")
+    
+    # ЭТАП 5: Последний fallback
+    if not car_info.brand:
+        print("🔍 ЭТАП 5: Последний fallback - используем дефолтные значения")
+        car_info.brand = "Автомобиль"
+        car_info.model = "Неизвестная модель"
+    
+    print(f"🎯 ИТОГ: Марка='{car_info.brand}', Модель='{car_info.model}'")
     
     # Извлечение года (4 цифры от 1980 до текущего года + 2)
     current_year = datetime.now().year
@@ -84,66 +231,118 @@ def extract_car_info_from_text(text: str) -> CarInfo:
         year = int(year_match.group(1))
         if 1980 <= year <= current_year + 2:
             car_info.year = year
+            print(f"✅ Найден год: {car_info.year}")
     
-    # Извлечение цены только в долларах
+    # Извлечение цены в долларах США
+    print("🔍 Поиск цены в долларах...")
     price_patterns = [
-        r'\$(\d{1,3}(?:[\s,]\d{3})*(?:\.\d{2})?)',  # $25,000 или $25 000
-        r'(\d{1,3}(?:[\s,]\d{3})*(?:\.\d{2})?)\s*\$',  # 25,000$ или 25 000$
-        r'(\d{1,3}(?:[\s,]?\d{3})*(?:\.\d{2})?)\s*(?:долл|dollar|USD)',  # 25000 долл
+        r'\$(\d{1,3}(?:,\d{3})*)',  # $25,000
+        r'(\d{1,3}(?:,\d{3})*)\s*\$',  # 25,000$
+        r'(\d{1,3}(?:,\d{3})*)\s*долл',  # 25000 долл
+        r'(\d+)\s*тыс.*долл',  # 25 тыс долл
+        r'price.*\$(\d{1,3}(?:,\d{3})*)',  # price: $25,000
+        r'цена.*(\d{1,3}(?:,\d{3})*)\s*\$',  # цена 25,000$
     ]
     
     for pattern in price_patterns:
-        price_match = re.search(pattern, text, re.IGNORECASE)
-        if price_match:
-            price_str = price_match.group(1)
-            if price_str:
-                # Очищаем и парсим число
-                clean_price = price_str.replace(' ', '').replace(',', '')
-                try:
-                    car_info.price = float(clean_price)
-                    break
-                except ValueError:
-                    continue
-    
-    # Извлечение пробега
-    mileage_patterns = [
-        r'(\d{1,3}(?:\s?\d{3})*)\s*(?:км|тыс\.?\s*км)',
-        r'пробег[:\s]*(\d{1,3}(?:\s?\d{3})*)',
-    ]
-    
-    for pattern in mileage_patterns:
-        mileage_match = re.search(pattern, text_lower)
-        if mileage_match:
-            mileage_str = mileage_match.group(1).replace(' ', '')
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            price_str = match.group(1).replace(',', '')
             try:
-                mileage = int(mileage_str)
-                # Если пробег в тысячах
-                if mileage < 1000:
-                    mileage *= 1000
-                car_info.mileage = mileage
-                break
+                price = int(price_str)
+                # Обработка "тыс долл"
+                if 'тыс' in match.group(0).lower():
+                    price *= 1000
+                    
+                if 5000 <= price <= 500000:  # Разумные пределы для цены авто
+                    car_info.price = price
+                    print(f"✅ Найдена цена: ${car_info.price}")
+                    break
             except ValueError:
                 continue
     
-    # Извлечение объема двигателя
-    engine_pattern = r'(\d+\.?\d*)\s*(?:л\.?|литр)'
-    engine_match = re.search(engine_pattern, text_lower)
-    if engine_match:
-        car_info.engine_volume = engine_match.group(1)
+    # Извлечение пробега
+    print("🔍 Поиск пробега...")
+    mileage_patterns = [
+        r'(\d{1,3}(?:,\d{3})*)\s*км',  # 150,000 км
+        r'пробег.*?(\d{1,3}(?:,\d{3})*)',  # пробег: 150000
+        r'(\d+)\s*тыс.*км',  # 150 тыс км
+        r'mileage.*?(\d{1,3}(?:,\d{3})*)',  # mileage: 150000
+    ]
     
-    # Определение коробки передач
-    if any(word in text_lower for word in ['автомат', 'акпп', 'автоматическая']):
-        car_info.transmission = 'Автомат'
-    elif any(word in text_lower for word in ['механика', 'мкпп', 'механическая']):
-        car_info.transmission = 'Механика'
+    for pattern in mileage_patterns:
+        match = re.search(pattern, text_lower)
+        if match:
+            mileage_str = match.group(1).replace(',', '')
+            try:
+                mileage = int(mileage_str)
+                # Обработка "тыс км"
+                if 'тыс' in match.group(0):
+                    mileage *= 1000
+                    
+                if 0 <= mileage <= 1000000:  # Разумные пределы для пробега
+                    car_info.mileage = mileage
+                    print(f"✅ Найден пробег: {car_info.mileage} км")
+                    break
+            except ValueError:
+                continue
     
-    # Определение типа привода
-    if any(word in text_lower for word in ['полный привод', '4wd', 'awd']):
-        car_info.drive_type = 'Полный'
-    elif any(word in text_lower for word in ['передний привод', 'fwd']):
-        car_info.drive_type = 'Передний'
-    elif any(word in text_lower for word in ['задний привод', 'rwd']):
-        car_info.drive_type = 'Задний'
+    # Извлечение информации о двигателе
+    engine_patterns = [
+        r'(\d\.?\d?)\s*[лl]',  # 2.0л или 2л
+        r'двигат.*?(\d\.?\d?)\s*[лl]',  # двигатель 2.0л
+        r'engine.*?(\d\.?\d?)\s*[lL]',  # engine 2.0L
+    ]
+    
+    for pattern in engine_patterns:
+        match = re.search(pattern, text_lower)
+        if match:
+            car_info.engine_volume = f"{match.group(1)}л"
+            print(f"✅ Найден объем двигателя: {car_info.engine_volume}")
+            break
+    
+    # Извлечение коробки передач
+    transmission_keywords = {
+        'автомат': ['автомат', 'automatic', 'акпп', 'auto'],
+        'механика': ['механика', 'manual', 'мкпп', 'мех'],
+        'вариатор': ['вариатор', 'cvt'],
+        'робот': ['робот', 'dsg', 'amt']
+    }
+    
+    for trans_type, keywords in transmission_keywords.items():
+        for keyword in keywords:
+            if keyword in text_lower:
+                car_info.transmission = trans_type
+                print(f"✅ Найдена КПП: {car_info.transmission}")
+                break
+        if car_info.transmission:
+            break
+    
+    # Извлечение типа привода
+    drive_keywords = {
+        'полный': ['полный', 'awd', '4wd', 'quattro'],
+        'передний': ['передний', 'fwd', 'front'],
+        'задний': ['задний', 'rwd', 'rear']
+    }
+    
+    for drive_type, keywords in drive_keywords.items():
+        for keyword in keywords:
+            if keyword in text_lower:
+                car_info.drive_type = drive_type
+                print(f"✅ Найден привод: {car_info.drive_type}")
+                break
+        if car_info.drive_type:
+            break
+    
+    print(f"🏁 ФИНАЛЬНЫЕ ДАННЫЕ:")
+    print(f"   Марка: {car_info.brand}")
+    print(f"   Модель: {car_info.model}")
+    print(f"   Год: {car_info.year}")
+    print(f"   Цена: ${car_info.price}")
+    print(f"   Пробег: {car_info.mileage} км")
+    print(f"   Двигатель: {car_info.engine_volume}")
+    print(f"   КПП: {car_info.transmission}")
+    print(f"   Привод: {car_info.drive_type}")
     
     return car_info
 
