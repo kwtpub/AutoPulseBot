@@ -49,12 +49,20 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
     car_info = extract_car_info_from_text(all_text)
     
     # Подготавливаем данные автомобиля для нового формата
+    # Применяем наценку к цене с сохранением оригинальной валюты
+    from app.perplexity_api.text_formatter import format_price_with_markup
+    
+    # Формируем цену с наценкой в оригинальной валюте
+    price_with_markup = format_price_with_markup(car_info, markup_percentage)
+    
     car_data = {
         'brand': car_info.brand if car_info.brand else 'Не указана',
         'model': car_info.model if car_info.model else 'Не указана',
         'year': str(car_info.year) if car_info.year else '2023',
         'mileage': str(car_info.mileage) if car_info.mileage else '50000',
-        'price': str(int(car_info.price)) if car_info.price else '2500000',
+        'price': price_with_markup,  # Цена с наценкой в оригинальной валюте
+        'original_price': car_info.price,  # Оригинальная цена для базы данных
+        'currency': car_info.currency,  # Валюта
         'engine': car_info.engine_volume + 'л, бензин' if car_info.engine_volume else '2.0л, бензин',
         'transmission': car_info.transmission if car_info.transmission else 'автомат',
         'drive_type': car_info.drive_type if car_info.drive_type else 'передний',

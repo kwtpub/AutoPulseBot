@@ -85,49 +85,25 @@ def extract_car_info_from_text(text: str) -> CarInfo:
         if 1980 <= year <= current_year + 2:
             car_info.year = year
     
-    # Извлечение цены (различные форматы) - порядок важен!
+    # Извлечение цены только в долларах
     price_patterns = [
-        # Цена в миллионах (напр. "2.5 млн")
-        r'(\d+(?:\.\d+)?)\s*(?:млн|миллион)',
-        # Цена в тысячах с указанием
-        r'(\d{1,3}(?:\s?\d{3})*)\s*(?:тысяч|тыс|т\.р\.?)',
-        # Полная цена после "цена:" (с пробелами или без)
-        r'цена[:\s]*(\d{1,3}(?:\s?\d{3})+)',
-        # Полная цена с символом рубля
-        r'(\d{7,})\s*₽',
-        # Полная цена с словом "рублей"  
-        r'(\d{7,})\s*руб',
-        # Прямое указание цены (короткие числа)
-        r'цена[:\s]*(\d{1,6})',
-        # Цена с символом рубля (короткие)
-        r'(\d{1,6})\s*₽',
-        # Цена с словом "рублей" (короткие)
-        r'(\d{1,6})\s*руб',
+        r'\$(\d{1,3}(?:[\s,]\d{3})*(?:\.\d{2})?)',  # $25,000 или $25 000
+        r'(\d{1,3}(?:[\s,]\d{3})*(?:\.\d{2})?)\s*\$',  # 25,000$ или 25 000$
+        r'(\d{1,3}(?:[\s,]?\d{3})*(?:\.\d{2})?)\s*(?:долл|dollar|USD)',  # 25000 долл
     ]
     
     for pattern in price_patterns:
-        price_match = re.search(pattern, text_lower)
+        price_match = re.search(pattern, text, re.IGNORECASE)
         if price_match:
-            price_str = price_match.group(1).replace(' ', '').replace(',', '.')
-            try:
-                price = float(price_str)
-                
-                # Логика определения формата цены
-                if 'млн' in text_lower or 'миллион' in text_lower:
-                    price *= 1000000  # Миллионы в рубли
-                elif 'тыс' in text_lower or 'тысяч' in text_lower:
-                    price *= 1000     # Тысячи в рубли
-                elif price >= 100000:  # Уже полная цена в рублях
-                    pass  # Оставляем как есть
-                elif price < 10000 and price > 100:  # Вероятно в тысячах
-                    price *= 1000
-                elif price < 100:    # Вероятно в миллионах
-                    price *= 1000000
-                
-                car_info.price = price
-                break
-            except ValueError:
-                continue
+            price_str = price_match.group(1)
+            if price_str:
+                # Очищаем и парсим число
+                clean_price = price_str.replace(' ', '').replace(',', '')
+                try:
+                    car_info.price = float(clean_price)
+                    break
+                except ValueError:
+                    continue
     
     # Извлечение пробега
     mileage_patterns = [
@@ -344,6 +320,26 @@ def apply_markup_to_price(original_price: float, markup_percentage: float) -> fl
         Цена с наценкой
     """
     return original_price * (1 + markup_percentage / 100)
+
+def format_price_with_markup(car_info: CarInfo, markup_percentage: float = 15.0) -> str:
+    """
+    Форматирует цену с наценкой в долларах
+    
+    Args:
+        car_info: Информация об автомобиле с ценой
+        markup_percentage: Процент наценки
+        
+    Returns:
+        Отформатированная цена с наценкой в долларах
+    """
+    if not car_info.price:
+        return "Цена не указана"
+    
+    # Применяем наценку
+    final_price = apply_markup_to_price(car_info.price, markup_percentage)
+    
+    # Форматируем в долларах
+    return f"${final_price:,.0f}"
 
 def validate_car_announcement_format(text: str) -> Tuple[bool, str]:
     """

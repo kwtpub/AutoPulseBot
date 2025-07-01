@@ -63,7 +63,7 @@ class TelegramMessageTemplate:
         message = f"""🚗 {brand} {model} {year}
 Custom ID: {custom_id}
 
-💰 Цена: {price} ₽ 
+💰 Цена: {price} — ТОЛЬКО ОНЛАЙН
 Пробег: {mileage} км
 Двигатель: {engine}
 КПП: {transmission}
