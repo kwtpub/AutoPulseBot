@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { saveCar, checkConnection, getCar, getAllCars } = require('./car');
+const { saveCar, checkConnection, getCar, getAllCars, checkDuplicate } = require('./car');
 require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 
 const app = express();
@@ -72,6 +72,26 @@ app.get('/api/cars', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting cars:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Check for duplicate car by source message ID and channel
+app.get('/api/cars/check-duplicate/:message_id/:channel', async (req, res) => {
+  try {
+    const { message_id, channel } = req.params;
+    const duplicate = await checkDuplicate(parseInt(message_id), channel);
+    
+    if (duplicate) {
+      res.json(duplicate);
+    } else {
+      res.json(null);
+    }
+  } catch (error) {
+    console.error('Error checking duplicate:', error);
     res.status(500).json({ 
       error: 'Internal server error',
       message: error.message 

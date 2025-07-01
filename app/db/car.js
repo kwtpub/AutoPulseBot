@@ -244,9 +244,41 @@ if (require.main === module) {
   })();
 }
 
+// Функция для проверки дубликатов по source_message_id и source_channel_name
+async function checkDuplicate(source_message_id, source_channel_name) {
+  let client;
+  try {
+    client = await pool.connect();
+    const query = `
+      SELECT custom_id, brand, model, year, created_at 
+      FROM cars 
+      WHERE source_message_id = $1 AND source_channel_name = $2
+    `;
+    const result = await client.query(query, [source_message_id, source_channel_name]);
+    
+    if (result.rows.length > 0) {
+      const existingCar = result.rows[0];
+      console.log(`🔍 Найден дубликат: ${existingCar.custom_id} (${existingCar.brand} ${existingCar.model} ${existingCar.year})`);
+      return existingCar;
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('Ошибка при проверке дубликатов:', err);
+    // При ошибке подключения возвращаем null (как будто дубликата нет)
+    // Это позволит продолжить обработку даже при проблемах с БД
+    return null;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 module.exports = { 
   saveCar: addCar, 
   checkConnection, 
   getCar, 
-  getAllCars 
+  getAllCars,
+  checkDuplicate
 }; 

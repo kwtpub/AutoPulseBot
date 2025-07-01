@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import MessageService
-from app.core.ocr import extract_text_from_image
+from app.ocr_api.legacy_wrapper import extract_text_from_image
 
 load_dotenv()
 
