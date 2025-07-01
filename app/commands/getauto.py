@@ -102,7 +102,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ **Неправильное использование команды!**\n\n"
             "**Использование:** /getauto <custom_id>\n"
-            "**Пример:** /getauto 12345678\n\n"
+            "**Пример:** /getauto 023-455\n\n"
             "Где custom_id - это ID автомобиля из объявления.",
             parse_mode='Markdown'
         )

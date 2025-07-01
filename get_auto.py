@@ -232,7 +232,7 @@ async def main():
     if len(sys.argv) != 3:
         print("❌ Неправильное использование!")
         print("Использование: python get_auto.py <custom_id> <user_id>")
-        print("Пример: python get_auto.py 12345678 987654321")
+        print("Пример: python get_auto.py 023-455 987654321")
         sys.exit(1)
     
     custom_id = sys.argv[1]

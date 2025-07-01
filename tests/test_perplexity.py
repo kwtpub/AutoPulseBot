@@ -22,7 +22,7 @@ class TestPerplexityProcessor:
         """Тест создания промпта."""
         announcement_text = "Продается BMW X5 2020 года"
         ocr_data = "Двигатель 3.0, пробег 50000 км"
-        custom_id = "12345"
+        custom_id = "023-455"
         markup_percentage = 10.0
         
         prompt = self.processor.create_prompt(

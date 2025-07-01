@@ -8,6 +8,7 @@ from app.cloudinary_api.legacy_wrapper import upload_image_to_cloudinary, get_im
 from app.utils.message_formatter import MessageFormatter
 from app.core.telegram import send_message_to_channel, send_message_with_photos_to_channel
 from app.utils.config import get_telegram_config, get_pricing_config
+from app.utils.id_generator import generate_custom_id, format_id_for_display
 import sys
 import shutil
 import random
@@ -22,8 +23,8 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
     message_id = ann["id"]
     print("--- Обработка объявления ID: " + str(message_id))
 
-    # Генерация уникального custom_id
-    custom_id = str(random.randint(10000000, 99999999))
+    # Генерация уникального custom_id в новом формате XXX-XXX
+    custom_id = generate_custom_id()
     print(">> Сгенерирован уникальный ID для поста:", custom_id)
     
     ocr_texts = []

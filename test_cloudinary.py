@@ -40,7 +40,7 @@ async def test_cloudinary():
     print(f"📸 Найдено тестовое изображение: {test_image}")
     
     # Тестируем загрузку
-    custom_id = "test_12345678"
+    custom_id = "023-455"
     public_id = f"car_{custom_id}_1"
     
     print(f"🔄 Загружаем изображение в Cloudinary с ID: {public_id}")
