@@ -1,8 +1,110 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import requests
 import textwrap
+import re
+from dataclasses import dataclass
+
+@dataclass
+class TelegramMessageTemplate:
+    """Шаблон сообщения для Telegram"""
+    
+    @staticmethod
+    def format_chinese_car_online_sale(
+        brand: str,
+        model: str,
+        year: str,
+        mileage: str,
+        price: str,
+        engine: str,
+        transmission: str,
+        drive_type: str,
+        trim: str,
+        color: str,
+        condition: str,
+        custom_id: str,
+        additional_features: List[str] = None,
+        city: str = "Москва"
+    ) -> str:
+        """
+        Формирует сообщение для онлайн-продажи китайских автомобилей
+        
+        Args:
+            brand: Марка автомобиля
+            model: Модель автомобиля
+            year: Год выпуска
+            mileage: Пробег
+            price: Цена
+            engine: Характеристики двигателя
+            transmission: Коробка передач
+            drive_type: Тип привода
+            trim: Комплектация
+            color: Цвет
+            condition: Состояние
+            custom_id: Уникальный ID автомобиля
+            additional_features: Дополнительные опции
+            city: Город
+            
+        Returns:
+            Отформатированное сообщение для Telegram
+        """
+        
+        # Основные характеристики
+        features = additional_features or [
+            "климат-контроль",
+            "камера заднего вида", 
+            "подогрев сидений",
+            "сенсорный экран",
+            "система безопасности"
+        ]
+        
+        # Формируем сообщение в новом формате
+        message = f"""🚗 {brand} {model} {year}
+Custom ID: {custom_id}
+
+💰 Цена: {price} ₽ 
+Пробег: {mileage} км
+Двигатель: {engine}
+КПП: {transmission}
+Привод: {drive_type}
+Цвет: {color}
+Комплектация: {trim}
+
+✨ Преимущества китайских авто:
+- Богатая комплектация уже в базе: современные опции, системы безопасности, климат-контроль, мультимедиа
+- Современные технологии и стильный дизайн
+- Официальная гарантия и сервисная поддержка до 5 лет
+- Экономичность и надежность
+- Отличное соотношение цена-качество
+
+🔧 Состояние:
+- {condition}
+- Все документы в порядке, электронная передача
+- Гарантия производителя
+
+🚚 Условия покупки:
+- 📦 Доставка по РФ
+- 💬 Связь только в Telegram
+
+⚡ Почему выгодно:
+- Максимум опций за разумные деньги
+- Просторный и комфортный салон
+- Нет проблем с сервисом и запчастями
+
+#китайскиеавто #онлайнпродажа #{brand.lower()}{model.lower().replace(' ', '')}"""
+
+        return message
+    
+    @staticmethod
+    def validate_message_length(message: str, max_length: int = 1024) -> bool:
+        """Проверяет длину сообщения"""
+        return len(message) <= max_length
+    
+    @staticmethod
+    def extract_hashtags(message: str) -> List[str]:
+        """Извлекает хештеги из сообщения"""
+        return re.findall(r'#\w+', message)
 
 class MessageFormatter:
     def __init__(self, template_path: Optional[str] = None):
@@ -19,6 +121,8 @@ class MessageFormatter:
 📅 Дата публикации: {date}'''
         
         self.template = self._load_template(template_path) if template_path else self.default_template
+        
+        self.telegram = TelegramMessageTemplate()
         
     def _load_template(self, path: str) -> str:
         try:
@@ -213,6 +317,59 @@ class MessageFormatter:
         message = "\n".join(line.strip() for line in message.split('\n') if line.strip())
         
         return message
+
+    def format_for_telegram(self, car_data: Dict) -> str:
+        """
+        Форматирует данные автомобиля для Telegram
+        
+        Args:
+            car_data: Словарь с данными автомобиля
+            
+        Returns:
+            Отформатированное сообщение
+        """
+        return self.telegram.format_chinese_car_online_sale(
+            brand=car_data.get('brand', ''),
+            model=car_data.get('model', ''),
+            year=car_data.get('year', ''),
+            mileage=car_data.get('mileage', ''),
+            price=car_data.get('price', ''),
+            engine=car_data.get('engine', ''),
+            transmission=car_data.get('transmission', ''),
+            drive_type=car_data.get('drive_type', ''),
+            trim=car_data.get('trim', ''),
+            color=car_data.get('color', ''),
+            condition=car_data.get('condition', ''),
+            custom_id=car_data.get('custom_id', ''),
+            additional_features=car_data.get('features', []),
+            city=car_data.get('city', 'Москва')
+        )
+    
+    def prepare_for_perplexity(self, car_data: Dict) -> Dict:
+        """
+        Подготавливает данные для отправки в Perplexity API
+        
+        Args:
+            car_data: Исходные данные автомобиля
+            
+        Returns:
+            Обработанные данные
+        """
+        return {
+            'brand': car_data.get('brand', '').strip(),
+            'model': car_data.get('model', '').strip(),
+            'year': str(car_data.get('year', '')),
+            'mileage': str(car_data.get('mileage', '')),
+            'price': str(car_data.get('price', '')),
+            'engine': car_data.get('engine', '').strip(),
+            'transmission': car_data.get('transmission', '').strip(),
+            'drive_type': car_data.get('drive_type', '').strip(),
+            'trim': car_data.get('trim', '').strip(),
+            'color': car_data.get('color', '').strip(),
+            'condition': car_data.get('condition', 'Хорошее').strip(),
+            'custom_id': car_data.get('custom_id', ''),
+            'city': car_data.get('city', 'Москва').strip()
+        }
 
 async def send_message_to_telegram(bot, chat_id, text, photo_url=None):
     """

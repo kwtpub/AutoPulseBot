@@ -39,17 +39,67 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
 
     ocr_data = '\n'.join(ocr_texts)
     
-    prompt = perplexity_processor.create_prompt(ann["text"], ocr_data, custom_id, markup_percentage)
+    # Извлекаем данные автомобиля из OCR и текста объявления
+    from app.perplexity_api.text_formatter import extract_car_info_from_text
     
-    print(">> Отправка запроса в Perplexity API...")
-    msg = await perplexity_processor.process_text(prompt)
-    print(">> Ответ от Perplexity получен.")
-
-    # Добавляем ID в начало поста
-    msg = f"ID: {custom_id}\n" + msg
-
-    # Добавляем контактную информацию в конец поста
-    msg = msg.strip() + "\n\nКонтакт: @VroomMarketManager"
+    # Объединяем все доступные текстовые данные
+    all_text = f"{ann.get('text', '')}\n{ocr_data}".strip()
+    
+    # Извлекаем структурированную информацию
+    car_info = extract_car_info_from_text(all_text)
+    
+    # Подготавливаем данные автомобиля для нового формата
+    car_data = {
+        'brand': car_info.brand if car_info.brand else 'Не указана',
+        'model': car_info.model if car_info.model else 'Не указана',
+        'year': str(car_info.year) if car_info.year else '2023',
+        'mileage': str(car_info.mileage) if car_info.mileage else '50000',
+        'price': str(int(car_info.price)) if car_info.price else '2500000',
+        'engine': car_info.engine_volume + 'л, бензин' if car_info.engine_volume else '2.0л, бензин',
+        'transmission': car_info.transmission if car_info.transmission else 'автомат',
+        'drive_type': car_info.drive_type if car_info.drive_type else 'передний',
+        'trim': car_info.trim if car_info.trim else 'комфорт',
+        'color': car_info.color if car_info.color else 'не указан',
+        'condition': car_info.condition if car_info.condition else 'хорошее',
+        'custom_id': custom_id,
+        'city': 'Москва'
+    }
+    
+    # Используем новый шаблон для создания сообщения
+    formatter = MessageFormatter()
+    
+    # Если нужно использовать Perplexity API, создаем промпт для онлайн-продажи
+    if perplexity_processor:
+        from app.perplexity_api.text_formatter import CarInfo, create_car_description_prompt
+        
+        # Создаем объект CarInfo на основе данных
+        car_info = CarInfo(
+            brand=car_data['brand'],
+            model=car_data['model'],
+            year=car_data['year'],
+            price=car_data['price'],
+            mileage=car_data['mileage'],
+            engine_volume=car_data['engine'],
+            transmission=car_data['transmission'],
+            drive_type=car_data['drive_type'],
+            color=car_data['color'],
+            trim=car_data['trim'],
+            condition=car_data['condition'],
+            custom_id=custom_id
+        )
+        
+        # Создаем промпт для онлайн-продажи китайских авто
+        prompt = create_car_description_prompt(
+            car_info, 
+            custom_context=f"Дополнительная информация из объявления: {ann['text']}\nДанные OCR: {ocr_data}"
+        )
+        
+        print(">> Отправка запроса в Perplexity API с новым промптом...")
+        msg = await perplexity_processor.process_text(prompt)
+        print(">> Ответ от Perplexity получен.")
+    else:
+        # Используем стандартный шаблон без Perplexity
+        msg = formatter.format_for_telegram(car_data)
     
     # Загрузка фотографий в Cloudinary
     cloudinary_urls = []
