@@ -18,13 +18,13 @@ import re
 
 def format_perplexity_response_with_quotes(response_text: str) -> str:
     """
-    Очищает ответ от Perplexity от остатков Markdown и проверяет HTML форматирование
+    Очищает ответ от Perplexity от остатков Markdown и применяет HTML форматирование
     
     Args:
         response_text: Текст ответа от Perplexity
         
     Returns:
-        Очищенный текст в HTML формате
+        Очищенный текст в HTML формате с blockquote для технических секций
     """
     if not response_text:
         return response_text
@@ -41,16 +41,49 @@ def format_perplexity_response_with_quotes(response_text: str) -> str:
     # Убираем - в начале строк (markdown списки)
     cleaned_text = re.sub(r'^- ', '', cleaned_text, flags=re.MULTILINE)
     
-    # Убираем > в начале строк (markdown цитаты) - они уже должны быть в <blockquote>
-    cleaned_text = re.sub(r'^> ', '', cleaned_text, flags=re.MULTILINE)
+    # Список разделов для форматирования в blockquote
+    sections_to_quote = [
+        # Технические характеристики
+        r'(🛠[️]?\s*(?:\*\*)?(?:<b>)?(?:Технические характеристики|Technical specifications)(?:</b>)?(?:\*\*)?[:\s]*)\n((?:(?!🛡|📱|📊|⚙️|Custom ID|#).+\n?)*)',
+        # Дополнительные детали с эмодзи ⚙️ (упрощенный паттерн)
+        r'(⚙️.*?Дополнительные детали.*?)\n(.*?)(?=\n*#)',
+        # Дополнительные детали с эмодзи 📊
+        r'(📊\s*(?:\*\*)?(?:<b>)?(?:Дополнительные детали|Additional details)(?:</b>)?(?:\*\*)?[:\s]*)\n((?:(?!🛠|🛡|📱|⚙️|Custom ID|#).+\n?)*)',
+        # Системы безопасности
+        r'(🛡[️]?\s*(?:\*\*)?(?:<b>)?(?:Системы безопасности|Safety systems|Состояние и документы)(?:</b>)?(?:\*\*)?[:\s]*)\n((?:(?!🛠|📱|📊|⚙️|Custom ID|#).+\n?)*)',
+        # Мультимедиа
+        r'(📱\s*(?:\*\*)?(?:<b>)?(?:Мультимедиа|Multimedia)(?:</b>)?(?:\*\*)?[:\s]*)\n((?:(?!🛠|🛡|📊|⚙️|Custom ID|#).+\n?)*)',
+        # Условия продажи
+        r'(📦\s*(?:\*\*)?(?:<b>)?(?:Условия продажи|Sales terms)(?:</b>)?(?:\*\*)?[:\s]*)\n((?:(?!🛠|🛡|📱|📊|⚙️|Custom ID|#).+\n?)*)'
+    ]
     
-    # Убираем лишние пробелы в конце строк
-    cleaned_text = re.sub(r'  +$', '', cleaned_text, flags=re.MULTILINE)
+    # Применяем blockquote форматирование к каждой секции
+    for pattern in sections_to_quote:
+        def replace_with_blockquote(match):
+            header = match.group(1).strip()
+            content = match.group(2).strip()
+            
+            # Очищаем заголовок от Markdown остатков
+            header = re.sub(r'\*\*', '', header)
+            header = re.sub(r'🛠️', '🛠', header)  # Нормализуем эмодзи
+            header = re.sub(r'🛡️', '🛡', header)
+            
+            # Если заголовок еще не обернут в <b>, оборачиваем
+            if '<b>' not in header or '</b>' not in header:
+                # Оборачиваем текст после эмодзи в <b>
+                header = re.sub(r'(🛠|📊|🛡|📱|📦|⚙️)\s*(.+)', r'\1 <b>\2</b>', header)
+            
+            if content:
+                return f"{header}\n<blockquote>{content}</blockquote>"
+            else:
+                return header
+        
+        cleaned_text = re.sub(pattern, replace_with_blockquote, cleaned_text, flags=re.MULTILINE | re.DOTALL)
     
-    # Убираем лишние пустые строки
-    cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
+    # Разделяем хештеги пробелами, если они слиплись
+    cleaned_text = re.sub(r'(#[^\s#]+)(?=#)', r'\1 ', cleaned_text)
     
-    return cleaned_text.strip()
+    return cleaned_text
 
 
 async def process_single_announcement(ann, perplexity_processor, source_channel, markup_percentage):

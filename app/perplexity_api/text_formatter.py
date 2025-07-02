@@ -76,17 +76,17 @@ def extract_car_info_from_text(text: str) -> CarInfo:
         'baojun': ['baojun', 'баоцзюнь'],
         'wuling': ['wuling', 'вулинг'],
         'lynk': ['lynk', 'линк'],
-        # Популярные международные
+        # Популярные международные (важно: сначала составные марки!)
+        'mercedes-benz': ['mercedes-benz', 'мерседес-бенц', 'mercedes benz'],
+        'audi': ['audi', 'ауди'],
+        'bmw': ['bmw', 'бмв'],
+        'volkswagen': ['volkswagen', 'фольксваген', 'vw'],
         'toyota': ['toyota', 'тойота'],
         'honda': ['honda', 'хонда'],
         'nissan': ['nissan', 'ниссан'],
         'mazda': ['mazda', 'мазда'],
         'hyundai': ['hyundai', 'хюндай', 'хендай'],
         'kia': ['kia', 'киа'],
-        'volkswagen': ['volkswagen', 'фольксваген', 'vw'],
-        'audi': ['audi', 'ауди'],
-        'bmw': ['bmw', 'бмв'],
-        'mercedes': ['mercedes', 'мерседес', 'mercedes-benz'],
         'ford': ['ford', 'форд'],
         'chevrolet': ['chevrolet', 'шевроле'],
         'opel': ['opel', 'опель'],
@@ -95,7 +95,8 @@ def extract_car_info_from_text(text: str) -> CarInfo:
         'volvo': ['volvo', 'вольво'],
         'skoda': ['skoda', 'шкода'],
         'lexus': ['lexus', 'лексус'],
-        'infiniti': ['infiniti', 'инфинити']
+        'infiniti': ['infiniti', 'инфинити'],
+        'mercedes': ['mercedes'],  # Одиночный mercedes в конце списка
     }
     
     # ЭТАП 1: Поиск марки в первой строке
@@ -236,6 +237,7 @@ def extract_car_info_from_text(text: str) -> CarInfo:
     # Извлечение цены в долларах США
     print("🔍 Поиск цены в долларах...")
     price_patterns = [
+        r'(\d{1,3}(?:\s\d{3})*)\s*\$',  # 40 400$ (с пробелами)
         r'\$(\d{1,3}(?:,\d{3})*)',  # $25,000
         r'(\d{1,3}(?:,\d{3})*)\s*\$',  # 25,000$
         r'(\d{1,3}(?:,\d{3})*)\s*долл',  # 25000 долл
@@ -244,10 +246,11 @@ def extract_car_info_from_text(text: str) -> CarInfo:
         r'цена.*(\d{1,3}(?:,\d{3})*)\s*\$',  # цена 25,000$
     ]
     
-    for pattern in price_patterns:
+    for i, pattern in enumerate(price_patterns):
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            price_str = match.group(1).replace(',', '')
+            price_str = match.group(1).replace(',', '').replace(' ', '')  # Убираем запятые и пробелы
+            print(f"🔍 Найден паттерн {i+1}: '{match.group(0)}' -> '{price_str}'")
             try:
                 price = int(price_str)
                 # Обработка "тыс долл"
@@ -258,7 +261,10 @@ def extract_car_info_from_text(text: str) -> CarInfo:
                     car_info.price = price
                     print(f"✅ Найдена цена: ${car_info.price}")
                     break
+                else:
+                    print(f"❌ Цена {price} вне разумных пределов")
             except ValueError:
+                print(f"❌ Ошибка парсинга цены: {price_str}")
                 continue
     
     # Извлечение пробега
