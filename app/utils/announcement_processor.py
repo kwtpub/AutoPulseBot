@@ -14,6 +14,7 @@ import shutil
 import random
 from app.storage_api.legacy_wrapper import save_car_with_formatting
 import re
+from app.utils.cbr_exchange_rate import get_cbr_usd_rate_with_markup
 
 
 def format_perplexity_response_with_quotes(response_text: str) -> str:
@@ -125,12 +126,19 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
     # Формируем цену с наценкой в оригинальной валюте
     price_with_markup = format_price_with_markup(car_info, markup_percentage)
     
+    # Получаем курс ЦБ РФ с наценкой
+    usd_to_rub = get_cbr_usd_rate_with_markup()
+    price_rub = None
+    if usd_to_rub and car_info.price:
+        price_rub = int(round(car_info.price * usd_to_rub))
+    
     car_data = {
         'brand': car_info.brand if car_info.brand else 'Не указана',
         'model': car_info.model if car_info.model else 'Не указана',
         'year': str(car_info.year) if car_info.year else '2023',
         'mileage': str(car_info.mileage) if car_info.mileage else '50000',
         'price': price_with_markup,  # Цена с наценкой в долларах
+        'price_rub': price_rub,      # Цена в рублях по курсу ЦБ РФ +2%
         'original_price': car_info.price,  # Оригинальная цена для базы данных
         'currency': 'USD',  # Всегда доллары
         'engine': car_info.engine_volume + 'л, бензин' if car_info.engine_volume else '2.0л, бензин',

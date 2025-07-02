@@ -25,7 +25,9 @@ class TelegramMessageTemplate:
         condition: str,
         custom_id: str,
         additional_features: List[str] = None,
-        city: str = "Москва"
+        city: str = "Москва",
+        price_rub: int = None,
+        price_usd: str = None
     ) -> str:
         """
         Формирует сообщение для онлайн-продажи китайских автомобилей
@@ -45,6 +47,8 @@ class TelegramMessageTemplate:
             custom_id: Уникальный ID автомобиля
             additional_features: Дополнительные опции
             city: Город
+            price_rub: Цена в рублях
+            price_usd: Цена в USD
             
         Returns:
             Отформатированное сообщение для Telegram
@@ -59,11 +63,17 @@ class TelegramMessageTemplate:
             "система безопасности"
         ]
         
+        # Формируем строку цены
+        if price_rub:
+            price_line = f"💰 Цена: {price_rub:,} ₽ ({price_usd or price} USD) — ТОЛЬКО ОНЛАЙН"
+        else:
+            price_line = f"💰 Цена: {price} — ТОЛЬКО ОНЛАЙН"
+        
         # Формируем сообщение в новом формате
         message = f"""🚗 {brand} {model} {year}
 Custom ID: {custom_id}
 
-💰 Цена: {price} — ТОЛЬКО ОНЛАЙН
+{price_line}
 Пробег: {mileage} км
 Двигатель: {engine}
 КПП: {transmission}
@@ -342,7 +352,9 @@ class MessageFormatter:
             condition=car_data.get('condition', ''),
             custom_id=car_data.get('custom_id', ''),
             additional_features=car_data.get('features', []),
-            city=car_data.get('city', 'Москва')
+            city=car_data.get('city', 'Москва'),
+            price_rub=car_data.get('price_rub'),
+            price_usd=car_data.get('price_usd')
         )
     
     def prepare_for_perplexity(self, car_data: Dict) -> Dict:
