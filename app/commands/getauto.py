@@ -43,44 +43,34 @@ async def download_image(url: str) -> BytesIO:
         return None
 
 def format_car_message(car_data: dict) -> str:
-    """Форматирует информацию об автомобиле для отправки"""
-    message = f"🚗 **Информация об автомобиле**\n\n"
-    
+    """Форматирует информацию об автомобиле для отправки (HTML)"""
+    message = f"🚗 <b>Информация об автомобиле</b>\n\n"
     # Основная информация
     if car_data.get('brand') and car_data.get('model'):
-        message += f"**{car_data['brand']} {car_data['model']}**"
+        message += f"<b>{car_data['brand']} {car_data['model']}</b>"
         if car_data.get('year'):
             message += f" ({car_data['year']})"
         message += "\n\n"
-    
     # Цена
     if car_data.get('price'):
         try:
             price = float(car_data['price'])
-            message += f"💰 **Цена:** {price:,.0f} ₽\n\n"
+            message += f"💰 <b>Цена:</b> {price:,.0f} ₽\n\n"
         except:
-            message += f"💰 **Цена:** {car_data['price']}\n\n"
-    
+            message += f"💰 <b>Цена:</b> {car_data['price']}\n\n"
     # Описание (сокращенное)
     if car_data.get('description'):
-        # Убираем ID из начала описания для чистоты
         description = car_data['description']
         if description.startswith('ID:'):
             lines = description.split('\n')
             description = '\n'.join(lines[1:]).strip()
-        
-        # Ограничиваем длину описания для Telegram caption
         if len(description) > 300:
             description = description[:300] + "..."
-        
-        message += f"📝 **Описание:**\n{description}\n\n"
-    
+        message += f"📝 <b>Описание:</b>\n{description}\n\n"
     # Техническая информация
-    message += f"🆔 **ID:** {car_data.get('custom_id', 'N/A')}\n"
-    
+    message += f"🆔 <b>ID:</b> {car_data.get('custom_id', 'N/A')}\n"
     if car_data.get('source_channel_name'):
-        message += f"📺 **Источник:** {car_data['source_channel_name']}\n"
-    
+        message += f"📺 <b>Источник:</b> {car_data['source_channel_name']}\n"
     if car_data.get('status'):
         status_emoji = {
             'available': '✅',
@@ -89,17 +79,12 @@ def format_car_message(car_data: dict) -> str:
             'error': '⚠️'
         }
         emoji = status_emoji.get(car_data['status'], '❓')
-        message += f"{emoji} **Статус:** {car_data['status']}\n"
-    
+        message += f"{emoji} <b>Статус:</b> {car_data['status']}\n"
     if car_data.get('created_at'):
-        message += f"📅 **Добавлено:** {car_data['created_at'][:10]}\n"
-    
-    message += "\n📞 **Контакт:** @VroomMarketManager"
-    
-    # Проверяем длину сообщения для Telegram caption (лимит 1024 символа)
+        message += f"📅 <b>Добавлено:</b> {car_data['created_at'][:10]}\n"
+    message += "\n📞 <b>Контакт:</b> @VroomMarketManager"
     if len(message) > 1000:
-        message = message[:950] + "...\n\n📞 **Контакт:** @VroomMarketManager"
-    
+        message = message[:950] + "...\n\n📞 <b>Контакт:</b> @VroomMarketManager"
     return message
 
 async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -113,7 +98,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "**Использование:** /getauto <custom_id>\n"
             "**Пример:** /getauto 023-455\n\n"
             "Где custom_id - это ID автомобиля из объявления.",
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return
     
@@ -122,7 +107,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Отправляем сообщение о поиске
     loading_message = await update.message.reply_text(
         f"🔍 Поиск автомобиля с ID: `{custom_id}`...",
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
     
     try:
@@ -130,7 +115,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await loading_message.edit_text(
             f"🔍 Поиск автомобиля с ID: `{custom_id}`...\n"
             f"📡 Подключение к базе данных...",
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         
         # Получаем данные из API
@@ -141,7 +126,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔍 Поиск автомобиля с ID: `{custom_id}`...\n"
             f"✅ Данные получены\n"
             f"⚙️ Обработка информации...",
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         
         if not car_data:
@@ -149,7 +134,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ **Автомобиль не найден**\n\n"
                 f"Автомобиль с ID `{custom_id}` не найден в базе данных.\n"
                 f"Проверьте правильность ID и попробуйте снова.",
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             return
         
@@ -166,7 +151,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ Данные получены\n"
                 f"✅ Информация обработана\n"
                 f"📸 Загрузка фотографий ({len(photos)} шт.)...",
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             
             # Скачиваем фотографии
@@ -187,7 +172,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"✅ Информация обработана\n"
                     f"✅ Фотографии загружены ({len(photo_files)} шт.)\n"
                     f"📤 Отправка результата...",
-                    parse_mode='Markdown'
+                    parse_mode='HTML'
                 )
                 
                 try:
@@ -196,7 +181,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await update.message.reply_photo(
                             photo=photo_files[0],
                             caption=message,
-                            parse_mode='Markdown'
+                            parse_mode='HTML'
                         )
                         
                         # Удаляем сообщение загрузки
@@ -209,7 +194,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         for i, photo_file in enumerate(photo_files):
                             if i == 0:
                                 # К первому фото добавляем подпись
-                                media_group.append(TelegramInputMediaPhoto(photo_file, caption=message, parse_mode='Markdown'))
+                                media_group.append(TelegramInputMediaPhoto(photo_file, caption=message, parse_mode='HTML'))
                             else:
                                 media_group.append(TelegramInputMediaPhoto(photo_file))
                         
@@ -229,12 +214,12 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             await update.message.reply_photo(
                                 photo=photo_files[0],
                                 caption=f"{message}\n\n⚠️ Остальные фото временно недоступны из-за ограничений Telegram",
-                                parse_mode='Markdown'
+                                parse_mode='HTML'
                             )
                         except:
                             await update.message.reply_text(
                                 f"⚠️ Фотографии временно недоступны из-за ограничений Telegram\n\n{message}",
-                                parse_mode='Markdown'
+                                parse_mode='HTML'
                             )
                     else:
                         raise e
@@ -242,7 +227,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Если фото не удалось скачать, отправляем только текст
                 await update.message.reply_text(
                     f"⚠️ Фотографии временно недоступны\n\n{message}",
-                    parse_mode='Markdown'
+                    parse_mode='HTML'
                 )
         else:
             # Обновляем статус: отправка без фото
@@ -252,13 +237,13 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ Информация обработана\n"
                 f"⚠️ Фотографии отсутствуют\n"
                 f"📤 Отправка результата...",
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             
             # Нет фотографий, отправляем только текст
             await update.message.reply_text(
                 message,
-                parse_mode='Markdown'
+                parse_mode='HTML'
             )
             
             # Удаляем сообщение загрузки
@@ -280,7 +265,7 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(
             contact_message,
-            parse_mode='Markdown',
+            parse_mode='HTML',
             reply_markup=reply_markup
         )
             
@@ -290,5 +275,5 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ **Произошла ошибка**\n\n"
             "Не удалось получить информацию об автомобиле. "
             "Попробуйте позже или обратитесь к администратору.",
-            parse_mode='Markdown'
+            parse_mode='HTML'
         ) 

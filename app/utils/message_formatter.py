@@ -27,7 +27,8 @@ class TelegramMessageTemplate:
         additional_features: List[str] = None,
         city: str = "Москва",
         price_rub: int = None,
-        price_usd: str = None
+        price_usd: str = None,
+        usd_to_rub: float = None
     ) -> str:
         """
         Формирует сообщение для онлайн-продажи китайских автомобилей
@@ -49,6 +50,7 @@ class TelegramMessageTemplate:
             city: Город
             price_rub: Цена в рублях
             price_usd: Цена в USD
+            usd_to_rub: Курс USD к RUB
             
         Returns:
             Отформатированное сообщение для Telegram
@@ -66,6 +68,8 @@ class TelegramMessageTemplate:
         # Формируем строку цены
         if price_rub:
             price_line = f"💰 Цена: {price_rub:,} ₽ ({price_usd or price} USD) — ТОЛЬКО ОНЛАЙН"
+            if usd_to_rub:
+                price_line += f"\n💱 Курс: 1 USD ≈ {usd_to_rub:.2f} ₽ (ЦБ РФ +2%)"
         else:
             price_line = f"💰 Цена: {price} — ТОЛЬКО ОНЛАЙН"
         
@@ -354,7 +358,8 @@ class MessageFormatter:
             additional_features=car_data.get('features', []),
             city=car_data.get('city', 'Москва'),
             price_rub=car_data.get('price_rub'),
-            price_usd=car_data.get('price_usd')
+            price_usd=car_data.get('price_usd'),
+            usd_to_rub=car_data.get('usd_to_rub')
         )
     
     def prepare_for_perplexity(self, car_data: Dict) -> Dict:

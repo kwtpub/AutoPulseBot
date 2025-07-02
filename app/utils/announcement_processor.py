@@ -148,7 +148,8 @@ async def process_single_announcement(ann, perplexity_processor, source_channel,
         'color': car_info.color if car_info.color else 'не указан',
         'condition': car_info.condition if car_info.condition else 'хорошее',
         'custom_id': custom_id,
-        'city': 'Москва'
+        'city': 'Москва',
+        'usd_to_rub': usd_to_rub
     }
     
     # Используем новый шаблон для создания сообщения
