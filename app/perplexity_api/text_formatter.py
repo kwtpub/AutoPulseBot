@@ -77,55 +77,178 @@ def extract_car_info_from_text(text: str) -> CarInfo:
         'baojun': ['baojun', 'баоцзюнь'],
         'wuling': ['wuling', 'вулинг'],
         'lynk': ['lynk', 'линк'],
-        # Популярные международные (важно: сначала составные марки!)
+        'lixiang': ['lixiang', 'лисян', 'лисянг', 'li xiang'],
+        # Составные европейские/премиум
         'mercedes-benz': ['mercedes-benz', 'мерседес-бенц', 'mercedes benz'],
+        'land rover': ['land rover', 'лэнд ровер', 'ленд ровер'],
+        'range rover': ['range rover', 'рэндж ровер', 'рейндж ровер'],
+        'rolls-royce': ['rolls-royce', 'роллс-ройс', 'rolls royce'],
+        'alfa romeo': ['alfa romeo', 'альфа ромео'],
+        'aston martin': ['aston martin', 'астон мартин'],
+        'mini cooper': ['mini cooper', 'мини купер'],
+        # Европейские
         'audi': ['audi', 'ауди'],
         'bmw': ['bmw', 'бмв'],
         'volkswagen': ['volkswagen', 'фольксваген', 'vw'],
+        'opel': ['opel', 'опель'],
+        'peugeot': ['peugeot', 'пежо'],
+        'renault': ['renault', 'рено'],
+        'skoda': ['skoda', 'шкода'],
+        'citroen': ['citroen', 'ситроен', 'ситроэн'],
+        'fiat': ['fiat', 'фиат'],
+        'seat': ['seat', 'сеат'],
+        'volvo': ['volvo', 'вольво'],
+        'saab': ['saab', 'сааб'],
+        'smart': ['smart', 'смарт'],
+        'dacia': ['dacia', 'дачия', 'дача'],
+        'lancia': ['lancia', 'ланча', 'лансия'],
+        'lotus': ['lotus', 'лотус'],
+        'porsche': ['porsche', 'порше'],
+        'jaguar': ['jaguar', 'ягуар'],
+        'bentley': ['bentley', 'бентли'],
+        'bugatti': ['bugatti', 'бугатти'],
+        'maserati': ['maserati', 'масерати'],
+        'ferrari': ['ferrari', 'феррари'],
+        'lamborghini': ['lamborghini', 'ламборгини'],
+        'mini': ['mini', 'мини'],
+        # Японские
         'toyota': ['toyota', 'тойота'],
         'honda': ['honda', 'хонда'],
         'nissan': ['nissan', 'ниссан'],
         'mazda': ['mazda', 'мазда'],
-        'hyundai': ['hyundai', 'хюндай', 'хендай'],
-        'kia': ['kia', 'киа'],
-        'ford': ['ford', 'форд'],
-        'chevrolet': ['chevrolet', 'шевроле'],
-        'opel': ['opel', 'опель'],
-        'renault': ['renault', 'рено'],
-        'peugeot': ['peugeot', 'пежо'],
-        'volvo': ['volvo', 'вольво'],
-        'skoda': ['skoda', 'шкода'],
+        'mitsubishi': ['mitsubishi', 'митсубиси', 'мицубиси'],
+        'subaru': ['subaru', 'субару'],
+        'suzuki': ['suzuki', 'сузуки'],
         'lexus': ['lexus', 'лексус'],
         'infiniti': ['infiniti', 'инфинити'],
+        'acura': ['acura', 'акура'],
+        'daihatsu': ['daihatsu', 'дайхатсу'],
+        'isuzu': ['isuzu', 'исузу'],
+        # Корейские
+        'hyundai': ['hyundai', 'хюндай', 'хендай'],
+        'kia': ['kia', 'киа'],
+        'ssangyong': ['ssangyong', 'ссангйонг', 'сангёнг'],
+        'genesis': ['genesis', 'генезис'],
+        'daewoo': ['daewoo', 'дэу', 'деу'],
+        # Американские
+        'ford': ['ford', 'форд'],
+        'chevrolet': ['chevrolet', 'шевроле'],
+        'cadillac': ['cadillac', 'кадиллак'],
+        'chrysler': ['chrysler', 'крайслер'],
+        'dodge': ['dodge', 'додж'],
+        'jeep': ['jeep', 'джип'],
+        'lincoln': ['lincoln', 'линкольн'],
+        'buick': ['buick', 'бьюик'],
+        'gmc': ['gmc', 'джиэмси'],
+        'hummer': ['hummer', 'хаммер'],
+        'tesla': ['tesla', 'тесла'],
+        'ram': ['ram', 'рам'],
+        # Российские
+        'lada': ['lada', 'ваз', 'лада'],
+        'uaz': ['uaz', 'уаз'],
+        'gaz': ['gaz', 'газ'],
+        'volga': ['volga', 'волга'],
+        'moskvich': ['moskvich', 'москвич'],
+        'zaz': ['zaz', 'заз'],
+        'luaz': ['luaz', 'луаз'],
+        # Прочие
         'mercedes': ['mercedes'],  # Одиночный mercedes в конце списка
+        # Экзотика, редкие, нишевые, новые электромобили и др.
+        'aixam': ['aixam', 'айксам'],
+        'ariel': ['ariel', 'ариэль'],
+        'baic': ['baic', 'байк'],
+        'baw': ['baw', 'бав'],
+        'belgee': ['belgee', 'белджи', 'белджи'],
+        'borgward': ['borgward', 'боргвард'],
+        'brabus': ['brabus', 'брабус'],
+        'bufori': ['bufori', 'буфори'],
+        'byton': ['byton', 'байтон'],
+        'changhe': ['changhe', 'чанхе'],
+        'datsun': ['datsun', 'датсун'],
+        'derways': ['derways', 'дервейс'],
+        'dfm': ['dfm', 'дфм'],
+        'dr': ['dr', 'др'],
+        'ds': ['ds', 'дс'],
+        'exeed': ['exeed', 'эксид'],
+        'fisker': ['fisker', 'фискер'],
+        'haima': ['haima', 'хайма'],
+        'hino': ['hino', 'хино'],
+        'iran khodro': ['iran khodro', 'иран ходро'],
+        'jetour': ['jetour', 'жетур'],
+        'jmc': ['jmc', 'джмс'],
+        'kamaz': ['kamaz', 'камаз'],
+        'king long': ['king long', 'кинг лонг'],
+        'landwind': ['landwind', 'лэндвинд'],
+        'leapmotor': ['leapmotor', 'липмотор'],
+        'mahindra': ['mahindra', 'махиндра'],
+        'maruti': ['maruti', 'марути'],
+        'maybach': ['maybach', 'майбах'],
+        'microcar': ['microcar', 'микрокар'],
+        'moskvich': ['moskvich', 'москвич'],
+        'nio': ['nio', 'нио'],
+        'perodua': ['perodua', 'перодуа'],
+        'proton': ['proton', 'протон'],
+        'ravon': ['ravon', 'равон'],
+        'saipa': ['saipa', 'сайпа'],
+        'scion': ['scion', 'сайон'],
+        'shineray': ['shineray', 'шайнерей'],
+        'ssangyong': ['ssangyong', 'ссангйонг', 'сангёнг'],
+        'tata': ['tata', 'тата'],
+        'vortex': ['vortex', 'вортекс'],
+        'weling': ['weling', 'велинг'],
+        'zotye': ['zotye', 'зотье'],
+        'zx': ['zx', 'зх'],
+        # Электромобили и новые бренды
+        'neta': ['neta', 'нета'],
+        'seres': ['seres', 'серес'],
+        'voyah': ['voyah', 'воя'],
+        'skywell': ['skywell', 'скайвелл'],
+        'weltmeister': ['weltmeister', 'вельтмайстер'],
+        'wm motor': ['wm motor', 'вм мотор'],
+        'zeekr': ['zeekr', 'зикр'],
+        # Индийские и малайзийские
+        'perodua': ['perodua', 'перодуа'],
+        # Редкие европейские
+        'dr': ['dr', 'др'],
+        'ds': ['ds', 'дс'],
+        'belgee': ['belgee', 'белджи', 'белджи'],
+        # Кастом/тюнинг
+        'mansory': ['mansory', 'мансори'],
+        'hamann': ['hamann', 'хаман'],
+        'g-power': ['g-power', 'джи-пауэр', 'g power'],
     }
     
-    # ЭТАП 1: Поиск марки в первой строке
+    # ЭТАП 1: Поиск марки в первой строке (сначала составные марки)
     found_brand = None
     brand_variants = None
-    
-    for brand_key, variants in brands_mapping.items():
+    first_line_lower = first_line.lower()
+    # Составляем список составных марок (2-3 слова)
+    sorted_brands = sorted(brands_mapping.items(), key=lambda x: -max(len(v.split()) for v in x[1]))
+    for brand_key, variants in sorted_brands:
         for variant in variants:
-            if variant in first_line.lower():
+            variant_clean = variant.replace('-', ' ').lower()
+            # Ищем как есть и без дефиса
+            if variant in first_line_lower or variant_clean in first_line_lower.replace('-', ' '):
                 found_brand = brand_key
                 brand_variants = variants
                 print(f"✅ ЭТАП 1: Найдена марка '{brand_key}' (вариант '{variant}') в первой строке")
                 break
         if found_brand:
             break
-    
     # Если найдена марка в первой строке, извлекаем модель
     if found_brand:
         # Ищем позицию марки
         brand_pos = -1
         used_variant = None
         for variant in brand_variants:
-            pos = first_line.lower().find(variant)
+            pos = first_line_lower.find(variant)
+            if pos == -1:
+                # Пробуем без дефиса
+                pos = first_line_lower.replace('-', ' ').find(variant.replace('-', ' '))
             if pos != -1:
                 brand_pos = pos
                 used_variant = variant
                 break
-        
         if brand_pos != -1:
             # Извлекаем часть после марки
             after_brand = first_line[brand_pos + len(used_variant):].strip()
@@ -133,9 +256,11 @@ def extract_car_info_from_text(text: str) -> CarInfo:
             model_clean = re.sub(r'\s*(19|20)\d{2}.*', '', after_brand).strip()
             # Убираем лишние символы
             model_clean = re.sub(r'[^\w\s-]', '', model_clean).strip()
-            
+            # Убираем служебные слова из модели
+            service_words_model = {'год', 'тип', 'комплектация', 'бизнес', 'класс', 'тип', 'new', 'новый', 'без', 'учета', 'таможенных', 'таможни', 'авто', 'машина', 'car', 'auto'}
+            model_words = [w for w in model_clean.split() if w.lower() not in service_words_model]
             car_info.brand = found_brand.title()
-            car_info.model = model_clean if model_clean else "Неизвестная модель"
+            car_info.model = ' '.join(model_words) if model_words else "Неизвестная модель"
             print(f"✅ ЭТАП 1: Марка={car_info.brand}, Модель={car_info.model}")
     
     # ЭТАП 2: Если не найдено - поиск по паттернам
@@ -165,31 +290,23 @@ def extract_car_info_from_text(text: str) -> CarInfo:
     # ЭТАП 3: Поиск марки по всему тексту
     if not car_info.brand:
         print("🔍 ЭТАП 3: Поиск марки по всему тексту")
-        
+        text_lower = text.lower()
+        service_words_model = {'год', 'тип', 'комплектация', 'бизнес', 'класс', 'тип', 'new', 'новый', 'без', 'учета', 'таможенных', 'таможни', 'авто', 'машина', 'car', 'auto'}
         for brand_key, variants in brands_mapping.items():
             for variant in variants:
-                # Ищем как отдельное слово
                 pattern = rf'\b{re.escape(variant)}\b'
                 match = re.search(pattern, text_lower)
                 if match:
                     car_info.brand = brand_key.title()
-                    
                     # Пытаемся найти модель рядом
-                    start = max(0, match.start() - 30)
-                    end = min(len(text), match.end() + 50)
-                    context = text[start:end]
-                    
-                    # Ищем слова после марки
-                    words_after = context[match.end()-start:].split()[:4]
+                    after = text[match.end():].strip().split()
                     model_words = []
-                    for word in words_after:
-                        clean_word = re.sub(r'[^\w-]', '', word)
-                        if clean_word and not clean_word.isdigit() and len(clean_word) > 1:
-                            model_words.append(clean_word)
-                        if len(model_words) >= 2:  # Берем максимум 2 слова для модели
-                            break
-                    
-                    car_info.model = ' '.join(model_words) if model_words else "Неизвестная модель"
+                    for w in after:
+                        if re.match(r'^(19|20)\d{2}$', w): break
+                        if w.lower() in service_words_model: break
+                        model_words.append(w)
+                        if len(model_words) >= 2: break
+                    car_info.model = ' '.join(model_words) if model_words else 'Неизвестная модель'
                     print(f"✅ ЭТАП 3: Найдено в тексте - Марка={car_info.brand}, Модель={car_info.model}")
                     break
             if car_info.brand:
@@ -198,24 +315,30 @@ def extract_car_info_from_text(text: str) -> CarInfo:
     # ЭТАП 4: Экстренный fallback - берем первые подходящие слова
     if not car_info.brand:
         print("🔍 ЭТАП 4: Экстренный fallback")
-        
         # Очищаем первую строку от мусора
-        clean_line = re.sub(r'[^\w\s-]', ' ', first_line)
+        clean_line = re.sub(r'[^-а-яА-ЯёЁ\s-]', ' ', first_line)
         words = [w for w in clean_line.split() if w.isalpha() and len(w) > 2]
-        
-        if len(words) >= 2:
-            # Исключаем служебные слова
-            service_words = {'продам', 'продается', 'авто', 'автомобиль', 'машина', 'цена', 'год', 'состояние', 'пробег'}
-            filtered_words = [w for w in words if w.lower() not in service_words]
-            
-            if len(filtered_words) >= 2:
-                car_info.brand = filtered_words[0].title()
-                car_info.model = filtered_words[1].title()
-                print(f"✅ ЭТАП 4: Fallback - Марка={car_info.brand}, Модель={car_info.model}")
-            elif len(filtered_words) == 1:
-                car_info.brand = filtered_words[0].title()
-                car_info.model = "Неизвестная модель"
-                print(f"✅ ЭТАП 4: Fallback - только марка={car_info.brand}")
+        # Расширенный список стоп-слов
+        service_words = {
+            'продам', 'продается', 'авто', 'автомобиль', 'машина', 'цена', 'год', 'состояние', 'пробег',
+            'минск', 'минске', 'без', 'в', 'на', 'купить', 'продажа', 'новый', 'б/у', 'комплектация',
+            'цвет', 'документы', 'объявление', 'или', 'и', 'с', 'по', 'за', 'от', 'до', 'новая', 'новое',
+            'новые', 'новых', 'нового', 'новой', 'новым', 'новыми', 'новых', 'новое', 'новая', 'новый',
+            'новое', 'новая', 'новый', 'новое', 'новая', 'новый', 'новое', 'новая', 'новый', 'новое',
+        }
+        filtered_words = [w for w in words if w.lower() not in service_words]
+        if len(filtered_words) >= 2:
+            car_info.brand = filtered_words[0].title()
+            car_info.model = filtered_words[1].title()
+            print(f"✅ ЭТАП 4: Fallback - Марка={car_info.brand}, Модель={car_info.model}")
+        elif len(filtered_words) == 1:
+            car_info.brand = filtered_words[0].title()
+            car_info.model = "Неизвестная модель"
+            print(f"✅ ЭТАП 4: Fallback - только марка={car_info.brand}")
+        else:
+            car_info.brand = "Автомобиль"
+            car_info.model = "Неизвестная модель"
+            print(f"✅ ЭТАП 4: Fallback - нет валидных слов, возвращаю дефолт")
     
     # ЭТАП 5: Последний fallback
     if not car_info.brand:

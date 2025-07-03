@@ -143,8 +143,9 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Получаем фотографии
         photos = car_data.get('photos', [])
-        
         if photos and len(photos) > 0:
+            # Ограничиваем максимум 10 фото
+            photos = photos[:10]
             # Обновляем статус: загрузка фото
             await loading_message.edit_text(
                 f"🔍 Поиск автомобиля с ID: `{custom_id}`...\n"
@@ -153,10 +154,9 @@ async def getauto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📸 Загрузка фотографий ({len(photos)} шт.)...",
                 parse_mode='HTML'
             )
-            
             # Скачиваем фотографии
             photo_files = []
-            for i, photo_url in enumerate(photos[:10]):  # Максимум 10 фото
+            for i, photo_url in enumerate(photos):
                 photo_data = await download_image(photo_url)
                 if photo_data:
                     photo_files.append(photo_data)
